@@ -4,6 +4,7 @@ import '../../models/user_model.dart';
 import '../../models/post_model.dart';
 import '../../models/feedback_model.dart';
 import '../../services/firestore_service.dart';
+import '../../services/update_service.dart';
 import '../../widgets/avatar_widget.dart';
 
 class AdminScreen extends StatefulWidget {
@@ -30,6 +31,127 @@ class _AdminScreenState extends State<AdminScreen> {
       _stats = stats;
       _loadingStats = false;
     });
+  }
+
+  void _showUpdateConfigDialog(AppVersionInfo? existing) {
+    final versionCtrl = TextEditingController(text: existing?.currentVersion ?? '1.0.0');
+    final minVersionCtrl = TextEditingController(text: existing?.minVersion ?? '1.0.0');
+    final urlCtrl = TextEditingController(text: existing?.updateUrl ?? '');
+    final notesCtrl = TextEditingController(text: existing?.releaseNotes ?? '');
+    final betaVersionCtrl = TextEditingController(text: existing?.betaVersion ?? '');
+    final betaUrlCtrl = TextEditingController(text: existing?.betaUrl ?? '');
+    bool betaEnabled = existing?.betaEnabled ?? false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Push App Update', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Current Version', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: versionCtrl,
+                  decoration: const InputDecoration(hintText: 'e.g. 1.2.0', isDense: true),
+                ),
+                const SizedBox(height: 12),
+                const Text('Minimum Version (force update below this)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: minVersionCtrl,
+                  decoration: const InputDecoration(hintText: 'e.g. 1.0.0', isDense: true),
+                ),
+                const SizedBox(height: 12),
+                const Text('Download URL', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: urlCtrl,
+                  decoration: const InputDecoration(hintText: 'GitHub release or Play Store URL', isDense: true),
+                ),
+                const SizedBox(height: 12),
+                const Text('Release Notes', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: notesCtrl,
+                  maxLines: 3,
+                  decoration: const InputDecoration(hintText: 'What\'s new in this version?', isDense: true),
+                ),
+                const SizedBox(height: 16),
+                // Beta toggle
+                Row(
+                  children: [
+                    Switch(
+                      value: betaEnabled,
+                      activeColor: AppColors.orange,
+                      onChanged: (v) => setDialogState(() => betaEnabled = v),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Enable Beta Channel', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                if (betaEnabled) ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: betaVersionCtrl,
+                    decoration: const InputDecoration(hintText: 'Beta version (e.g. 1.3.0-beta)', isDense: true),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: betaUrlCtrl,
+                    decoration: const InputDecoration(hintText: 'Beta download URL', isDense: true),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final version = versionCtrl.text.trim();
+                final minVersion = minVersionCtrl.text.trim();
+                final url = urlCtrl.text.trim();
+                final notes = notesCtrl.text.trim();
+                if (version.isEmpty || url.isEmpty) return;
+
+                final info = AppVersionInfo(
+                  currentVersion: version,
+                  minVersion: minVersion.isNotEmpty ? minVersion : '1.0.0',
+                  updateUrl: url,
+                  releaseNotes: notes.isNotEmpty ? notes : 'New version available!',
+                  betaEnabled: betaEnabled,
+                  betaVersion: betaEnabled ? betaVersionCtrl.text.trim() : null,
+                  betaUrl: betaEnabled ? betaUrlCtrl.text.trim() : null,
+                );
+
+                await UpdateService().updateVersionConfig(info);
+                if (ctx.mounted) Navigator.pop(ctx);
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Update v$version pushed! All users will be notified.'),
+                      backgroundColor: AppColors.green,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Push Update'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showAddCategoryDialog() {
@@ -121,6 +243,81 @@ class _AdminScreenState extends State<AdminScreen> {
                 ],
               ),
             ),
+
+            // App Update Management
+            _sectionTitle('App Update Management'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(10),
+                      blurRadius: 16,
+                    ),
+                  ],
+                ),
+                child: StreamBuilder<AppVersionInfo?>(
+                  stream: UpdateService().getVersionConfig(),
+                  builder: (context, snapshot) {
+                    final info = snapshot.data;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.system_update, size: 20, color: AppColors.tealDark),
+                            const SizedBox(width: 8),
+                            Text(
+                              info != null ? 'Current: v${info.currentVersion}' : 'No version set',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
+                            ),
+                            const Spacer(),
+                            if (info?.betaEnabled == true)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.orangeLight,
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                                child: Text(
+                                  'Beta: v${info?.betaVersion ?? '-'}',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.orange),
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (info != null) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Min version: v${info.minVersion} · Notes: ${info.releaseNotes}',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () => _showUpdateConfigDialog(info),
+                            icon: const Icon(Icons.publish, size: 18),
+                            label: const Text('Push New Update'),
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
 
             // Manage Categories
             _sectionTitle('Manage Categories'),

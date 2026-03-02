@@ -9,6 +9,8 @@ import 'providers/app_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/main_shell.dart';
 import 'services/auth_service.dart';
+import 'services/update_service.dart';
+import 'widgets/update_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -109,6 +111,30 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _navigateAfterSplash() async {
     await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) return;
+
+    // Check for app updates (skip on web)
+    if (!kIsWeb) {
+      try {
+        final updateService = UpdateService();
+        final result = await updateService.checkForUpdate();
+        if (mounted && result.type != UpdateType.none && result.info != null) {
+          await showDialog(
+            context: context,
+            barrierDismissible: result.type != UpdateType.forced,
+            builder: (_) => UpdateDialog(
+              updateType: result.type,
+              versionInfo: result.info!,
+            ),
+          );
+          // If forced update, don't proceed
+          if (result.type == UpdateType.forced) return;
+        }
+      } catch (_) {
+        // Update check failed, continue normally
+      }
+    }
+
     if (!mounted) return;
 
     final authService = AuthService();
