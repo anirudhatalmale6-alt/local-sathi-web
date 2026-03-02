@@ -18,19 +18,37 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Local Sathi - Your Community Companion. Find trusted service providers in your neighborhood.">
+  <meta name="theme-color" content="#00BCD4">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="local_sathi">
+  <meta name="apple-mobile-web-app-title" content="Local Sathi">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>local_sathi</title>
+  <title>Local Sathi - Your Community Companion</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyB8rbRBZodVqfGT3OeiXsIjsB5BOUtKG_4",
+      authDomain: "local-sathi-eced8.firebaseapp.com",
+      projectId: "local-sathi-eced8",
+      storageBucket: "local-sathi-eced8.firebasestorage.app",
+      messagingSenderId: "342397239071",
+      appId: "1:342397239071:web:05ecc60d93da1966883a2a"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
