@@ -6,6 +6,7 @@ import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../models/user_model.dart';
 import '../../widgets/provider_card.dart';
+import '../../widgets/feedback_bar.dart';
 import '../provider_detail/provider_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -315,6 +316,20 @@ class HomeScreen extends StatelessWidget {
                   );
                 },
               ),
+            ),
+          ),
+
+          // Feedback bar
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: appProvider.currentUser != null
+                  ? FeedbackBar(
+                      userUid: appProvider.currentUser!.uid,
+                      userName: appProvider.currentUser!.name,
+                      userLocalSathiId: appProvider.currentUser!.localSathiId,
+                    )
+                  : const SizedBox.shrink(),
             ),
           ),
 

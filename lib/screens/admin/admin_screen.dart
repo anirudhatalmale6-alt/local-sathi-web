@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
 import '../../models/post_model.dart';
+import '../../models/feedback_model.dart';
 import '../../services/firestore_service.dart';
 import '../../widgets/avatar_widget.dart';
 
@@ -119,6 +120,30 @@ class _AdminScreenState extends State<AdminScreen> {
                   itemBuilder: (context, index) {
                     final post = posts[index];
                     return _reportCard(post);
+                  },
+                );
+              },
+            ),
+
+            const SizedBox(height: 16),
+
+            // User Feedback
+            _sectionTitle('User Feedback'),
+            StreamBuilder<List<FeedbackModel>>(
+              stream: _firestoreService.getAllFeedback(),
+              builder: (context, snapshot) {
+                final feedbacks = snapshot.data ?? [];
+                if (feedbacks.isEmpty) {
+                  return _emptyState('No feedback yet');
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: feedbacks.length,
+                  itemBuilder: (context, index) {
+                    final fb = feedbacks[index];
+                    return _feedbackCard(fb);
                   },
                 );
               },
@@ -289,6 +314,155 @@ class _AdminScreenState extends State<AdminScreen> {
           color: bg,
         ),
         child: Icon(icon, size: 18, color: iconColor),
+      ),
+    );
+  }
+
+  Widget _feedbackCard(FeedbackModel fb) {
+    final categoryIcon = fb.category == 'bug'
+        ? Icons.bug_report_outlined
+        : fb.category == 'feature'
+            ? Icons.lightbulb_outline
+            : Icons.chat_bubble_outline;
+    final categoryLabel = fb.category == 'bug'
+        ? 'Bug Report'
+        : fb.category == 'feature'
+            ? 'Feature Request'
+            : 'General';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: fb.isRead ? null : Border.all(color: AppColors.teal.withAlpha(60), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AvatarWidget(name: fb.userName, size: 36),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fb.userName,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    Text(
+                      fb.userLocalSathiId,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Star rating
+              Row(
+                children: List.generate(
+                  5,
+                  (i) => Icon(
+                    Icons.star,
+                    size: 14,
+                    color: i < fb.rating ? AppColors.gold : AppColors.textMuted.withAlpha(60),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Category chip
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.tealLight,
+              borderRadius: BorderRadius.circular(100),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(categoryIcon, size: 14, color: AppColors.tealDark),
+                const SizedBox(width: 4),
+                Text(
+                  categoryLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.tealDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            fb.message,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (!fb.isRead)
+                GestureDetector(
+                  onTap: () => _firestoreService.markFeedbackRead(fb.id),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.tealLight,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      'Mark Read',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.tealDark,
+                      ),
+                    ),
+                  ),
+                ),
+              if (!fb.isRead) const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => _firestoreService.deleteFeedback(fb.id),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.redLight,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.red,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

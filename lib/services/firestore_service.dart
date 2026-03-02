@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
 import '../models/review_model.dart';
+import '../models/feedback_model.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -204,6 +205,30 @@ class FirestoreService {
   // Delete category
   Future<void> deleteCategory(String id) async {
     await _firestore.collection('categories').doc(id).delete();
+  }
+
+  // ══════════════════ FEEDBACK ══════════════════
+
+  // Get all feedback (admin)
+  Stream<List<FeedbackModel>> getAllFeedback({int limit = 50}) {
+    return _firestore
+        .collection('feedback')
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => FeedbackModel.fromFirestore(d)).toList());
+  }
+
+  // Mark feedback as read
+  Future<void> markFeedbackRead(String feedbackId) async {
+    await _firestore.collection('feedback').doc(feedbackId).update({
+      'isRead': true,
+    });
+  }
+
+  // Delete feedback
+  Future<void> deleteFeedback(String feedbackId) async {
+    await _firestore.collection('feedback').doc(feedbackId).delete();
   }
 
   // Get app stats
