@@ -1,0 +1,79 @@
+import 'package:flutter/material.dart';
+import '../models/user_model.dart';
+import '../services/auth_service.dart';
+import '../services/location_service.dart';
+
+class AppProvider extends ChangeNotifier {
+  final AuthService _authService = AuthService();
+
+  UserModel? _currentUser;
+  String _city = '';
+  String _state = '';
+  double? _latitude;
+  double? _longitude;
+  bool _isLoading = false;
+  int _currentTabIndex = 0;
+
+  UserModel? get currentUser => _currentUser;
+  String get city => _city;
+  String get state => _state;
+  double? get latitude => _latitude;
+  double? get longitude => _longitude;
+  bool get isLoading => _isLoading;
+  int get currentTabIndex => _currentTabIndex;
+  bool get isLoggedIn => _authService.currentUser != null;
+
+  void setTabIndex(int index) {
+    _currentTabIndex = index;
+    notifyListeners();
+  }
+
+  void setLoading(bool loading) {
+    _isLoading = loading;
+    notifyListeners();
+  }
+
+  Future<void> loadCurrentUser() async {
+    final user = _authService.currentUser;
+    if (user != null) {
+      _currentUser = await _authService.getUserProfile(user.uid);
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadLocation() async {
+    try {
+      final position = await LocationService.getCurrentLocation();
+      if (position != null) {
+        _latitude = position.latitude;
+        _longitude = position.longitude;
+        final address = await LocationService.getAddressFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (address != null) {
+          _city = address['city'] ?? '';
+          _state = address['state'] ?? '';
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      // Location failed, use default
+      _city = 'Mumbai';
+      _state = 'Maharashtra';
+      notifyListeners();
+    }
+  }
+
+  Future<void> signOut() async {
+    await _authService.signOut();
+    _currentUser = null;
+    _currentTabIndex = 0;
+    notifyListeners();
+  }
+
+  void updateUser(UserModel user) {
+    _currentUser = user;
+    notifyListeners();
+  }
+}
