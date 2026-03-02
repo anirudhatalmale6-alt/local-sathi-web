@@ -7,6 +7,42 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:342397239071:android:bce1b31740039b24883a2a",
+        "android_client_info": {
+          "package_name": "com.localsathi.local_sathi"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "342397239071-gke8rqglqo9d76upn3312fra3i4oft2b.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDNOCIYHqUr-D3qX0Hk5on8dykkvrhB5tY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "342397239071-gke8rqglqo9d76upn3312fra3i4oft2b.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "342397239071-agl01scnpjr9cebjppbp53612p741olp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.localsathi"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:342397239071:android:17b8b78306d5bfdd883a2a",
         "android_client_info": {
           "package_name": "com.mycompany.localsathi"
