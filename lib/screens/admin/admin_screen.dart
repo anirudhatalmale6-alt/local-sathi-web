@@ -32,6 +32,49 @@ class _AdminScreenState extends State<AdminScreen> {
     });
   }
 
+  void _showAddCategoryDialog() {
+    final nameController = TextEditingController();
+    final iconController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Add Category', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(hintText: 'Category name (e.g. Doctor)'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: iconController,
+              decoration: const InputDecoration(hintText: 'Emoji icon (e.g. 🩺)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              final icon = iconController.text.trim();
+              if (name.isNotEmpty) {
+                await _firestoreService.addCategory(name, icon.isNotEmpty ? icon : '📌');
+                if (ctx.mounted) Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -78,6 +121,43 @@ class _AdminScreenState extends State<AdminScreen> {
                 ],
               ),
             ),
+
+            // Manage Categories
+            _sectionTitle('Manage Categories'),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: StreamBuilder<List<String>>(
+                stream: _firestoreService.getCategories(),
+                builder: (context, snapshot) {
+                  final categories = snapshot.data ?? [];
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ...categories.map((cat) => Chip(
+                                label: Text(cat, style: const TextStyle(fontSize: 12)),
+                                deleteIcon: const Icon(Icons.close, size: 16),
+                                onDeleted: () => _firestoreService.deleteCategoryByName(cat),
+                                backgroundColor: AppColors.tealLight,
+                              )),
+                          ActionChip(
+                            avatar: const Icon(Icons.add, size: 18, color: AppColors.teal),
+                            label: const Text('Add New', style: TextStyle(fontSize: 12, color: AppColors.teal)),
+                            backgroundColor: AppColors.bg,
+                            onPressed: () => _showAddCategoryDialog(),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+
+            const SizedBox(height: 16),
 
             // Pending Verifications
             _sectionTitle('Pending Aadhaar Verifications'),

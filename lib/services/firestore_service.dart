@@ -9,40 +9,58 @@ class FirestoreService {
 
   // ══════════════════ PROVIDERS ══════════════════
 
-  // Get featured providers (sponsored first, then top rated)
+  // Get featured providers (filter & sort client-side to avoid composite indexes)
   Stream<List<UserModel>> getFeaturedProviders({int limit = 10}) {
     return _firestore
         .collection('users')
         .where('role', isEqualTo: 'provider')
-        .where('verificationStatus', isEqualTo: 'verified')
-        .orderBy('isSponsored', descending: true)
-        .orderBy('rating', descending: true)
-        .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => UserModel.fromFirestore(d)).toList());
+        .map((snap) {
+      final providers = snap.docs
+          .map((d) => UserModel.fromFirestore(d))
+          .where((u) => u.verificationStatus == VerificationStatus.verified)
+          .toList();
+      // Sort: sponsored first, then by rating
+      providers.sort((a, b) {
+        if (a.isSponsored && !b.isSponsored) return -1;
+        if (!a.isSponsored && b.isSponsored) return 1;
+        return b.rating.compareTo(a.rating);
+      });
+      return providers.take(limit).toList();
+    });
   }
 
-  // Search providers by category
+  // Search providers by category (filter client-side to avoid composite indexes)
   Stream<List<UserModel>> searchProviders({
     String? category,
     double? lat,
     double? lng,
     double radiusKm = 5,
   }) {
-    Query query = _firestore
+    return _firestore
         .collection('users')
         .where('role', isEqualTo: 'provider')
-        .where('verificationStatus', isEqualTo: 'verified');
+        .snapshots()
+        .map((snap) {
+      var providers = snap.docs
+          .map((d) => UserModel.fromFirestore(d))
+          .where((u) => u.verificationStatus == VerificationStatus.verified)
+          .toList();
 
-    if (category != null && category != 'All') {
-      query = query.where('serviceCategories', arrayContains: category);
-    }
+      if (category != null && category != 'All') {
+        providers = providers
+            .where((u) => u.serviceCategories.contains(category))
+            .toList();
+      }
 
-    query = query.orderBy('isSponsored', descending: true)
-        .orderBy('rating', descending: true);
-
-    return query.snapshots().map(
-        (snap) => snap.docs.map((d) => UserModel.fromFirestore(d)).toList());
+      // Sort: sponsored first, then by rating
+      providers.sort((a, b) {
+        if (a.isSponsored && !b.isSponsored) return -1;
+        if (!a.isSponsored && b.isSponsored) return 1;
+        return b.rating.compareTo(a.rating);
+      });
+      return providers;
+    });
   }
 
   // Get provider by uid
@@ -54,15 +72,17 @@ class FirestoreService {
 
   // ══════════════════ POSTS ══════════════════
 
-  // Get live feed posts
+  // Get live feed posts (filter reported client-side to avoid composite index)
   Stream<List<PostModel>> getLiveFeed({int limit = 50}) {
     return _firestore
         .collection('posts')
-        .where('isReported', isEqualTo: false)
         .orderBy('createdAt', descending: true)
         .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => PostModel.fromFirestore(d)).toList());
+        .map((snap) => snap.docs
+            .map((d) => PostModel.fromFirestore(d))
+            .where((p) => !p.isReported)
+            .toList());
   }
 
   // Get user's posts
@@ -161,14 +181,17 @@ class FirestoreService {
     });
   }
 
-  // Get reported posts for moderation
+  // Get reported posts for moderation (sort client-side to avoid composite index)
   Stream<List<PostModel>> getReportedPosts() {
     return _firestore
         .collection('posts')
         .where('isReported', isEqualTo: true)
-        .orderBy('reportCount', descending: true)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => PostModel.fromFirestore(d)).toList());
+        .map((snap) {
+      final posts = snap.docs.map((d) => PostModel.fromFirestore(d)).toList();
+      posts.sort((a, b) => b.reportCount.compareTo(a.reportCount));
+      return posts;
+    });
   }
 
   // Delete a post (admin moderation)
@@ -202,9 +225,20 @@ class FirestoreService {
     });
   }
 
-  // Delete category
+  // Delete category by id
   Future<void> deleteCategory(String id) async {
     await _firestore.collection('categories').doc(id).delete();
+  }
+
+  // Delete category by name
+  Future<void> deleteCategoryByName(String name) async {
+    final docs = await _firestore
+        .collection('categories')
+        .where('name', isEqualTo: name)
+        .get();
+    for (var doc in docs.docs) {
+      await doc.reference.delete();
+    }
   }
 
   // ══════════════════ FEEDBACK ══════════════════

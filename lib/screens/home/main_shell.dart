@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../models/post_model.dart';
 import '../../providers/app_provider.dart';
+import '../../services/firestore_service.dart';
 import 'home_screen.dart';
 import '../search/search_screen.dart';
 import '../feed/feed_screen.dart';
@@ -224,19 +226,46 @@ class _ComposeSheetState extends State<_ComposeSheet> {
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: _charCount > 0 ? () {
-                    // TODO: Create post via FirestoreService
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Post published!'),
-                        backgroundColor: AppColors.green,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
+                  onPressed: _charCount > 0 ? () async {
+                    final text = _textController.text.trim();
+                    if (text.isEmpty || user == null) return;
+
+                    final post = PostModel(
+                      id: '',
+                      authorUid: user.uid,
+                      authorName: user.name,
+                      authorLocalSathiId: user.localSathiId,
+                      text: text,
+                      createdAt: DateTime.now(),
                     );
+
+                    try {
+                      await FirestoreService().createPost(post);
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Post published!'),
+                          backgroundColor: AppColors.green,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to post: $e'),
+                          backgroundColor: AppColors.red,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      );
+                    }
                   } : null,
                   child: const Text('Post'),
                 ),
