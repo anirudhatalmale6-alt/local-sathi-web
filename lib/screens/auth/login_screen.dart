@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:sms_autofill/sms_autofill.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../services/auth_service.dart';
@@ -14,7 +16,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin, CodeAutoFill {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
   final _authService = AuthService();
@@ -38,8 +40,26 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _animController.forward();
   }
 
+  /// Called by CodeAutoFill mixin when SMS code is detected
+  @override
+  void codeUpdated() {
+    if (code != null && code!.length == 6) {
+      setState(() {
+        _otpController.text = code!;
+      });
+      // Auto-verify once OTP is filled
+      _verifyOTP();
+    }
+  }
+
+  void _startListeningForSms() {
+    if (kIsWeb) return;
+    listenForCode();
+  }
+
   @override
   void dispose() {
+    cancel(); // Stop SMS listener
     _phoneController.dispose();
     _otpController.dispose();
     _animController.dispose();
@@ -65,6 +85,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           _otpSent = true;
           _isLoading = false;
         });
+        _startListeningForSms();
       },
       onError: (error) {
         setState(() => _isLoading = false);
@@ -235,7 +256,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         const SizedBox(height: 4),
                         Text(
                           _otpSent
-                              ? 'We sent a 6-digit code to your phone'
+                              ? 'OTP will be detected automatically'
                               : 'Sign in with your phone number',
                           style: const TextStyle(
                             fontSize: 14,
