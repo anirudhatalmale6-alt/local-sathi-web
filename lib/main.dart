@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -40,6 +41,36 @@ class LocalSathiApp extends StatelessWidget {
         title: 'Local Sathi',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
+        builder: (context, child) {
+          // Constrain width on web to look like a mobile app
+          if (kIsWeb && MediaQuery.of(context).size.width > 600) {
+            final screenHeight = MediaQuery.of(context).size.height;
+            return Container(
+              color: const Color(0xFFE0E0E0),
+              child: Center(
+                child: Container(
+                  width: 420,
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(40),
+                        blurRadius: 24,
+                      ),
+                    ],
+                  ),
+                  clipBehavior: Clip.hardEdge,
+                  child: MediaQuery(
+                    data: MediaQuery.of(context).copyWith(
+                      size: Size(420, screenHeight),
+                    ),
+                    child: child!,
+                  ),
+                ),
+              ),
+            );
+          }
+          return child!;
+        },
         home: const SplashScreen(),
       ),
     );
