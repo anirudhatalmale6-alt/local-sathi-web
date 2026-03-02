@@ -17,9 +17,14 @@ void main() async {
     statusBarIconBrightness: Brightness.light,
   ));
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    // Firebase init failed - app will still launch
+    debugPrint('Firebase init error: $e');
+  }
 
   runApp(const LocalSathiApp());
 }
