@@ -193,7 +193,6 @@ class _SplashScreenState extends State<SplashScreen>
                     height: 120,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(0.15),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.1),
@@ -201,10 +200,15 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ],
                     ),
-                    child: const Icon(
-                      Icons.location_on,
-                      size: 60,
-                      color: Colors.white,
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/icons/app_icon.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.white.withOpacity(0.15),
+                          child: const Icon(Icons.location_on, size: 60, color: Colors.white),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),

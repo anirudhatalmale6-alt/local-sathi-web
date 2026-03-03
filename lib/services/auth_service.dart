@@ -63,11 +63,17 @@ class AuthService {
 
     final localSathiId = '${AppConstants.idPrefix}$nextId';
 
+    // Auto-assign admin role to first user (LS-100001) or designated admin phones
+    final isFirstUser = nextId == AppConstants.startingId;
+    final isAdminPhone = AppConstants.adminPhones.contains(phone.replaceAll('+91', ''));
+    final autoRole = (isFirstUser || isAdminPhone) ? UserRole.admin : UserRole.customer;
+
     final user = UserModel(
       uid: uid,
       name: name,
       phone: phone,
       localSathiId: localSathiId,
+      role: autoRole,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -79,7 +85,26 @@ class AuthService {
       'nextId': nextId + 1,
     });
 
+    // If this is an admin, seed initial app config
+    if (autoRole == UserRole.admin) {
+      await _seedAppConfig();
+    }
+
     return user;
+  }
+
+  /// Seed initial app config if not exists
+  Future<void> _seedAppConfig() async {
+    final versionDoc = await _firestore.collection('app_config').doc('version').get();
+    if (!versionDoc.exists) {
+      await _firestore.collection('app_config').doc('version').set({
+        'currentVersion': '1.3.1',
+        'minVersion': '1.0.0',
+        'updateUrl': 'https://github.com/anirudhatalmale6-alt/local-sathi-app/releases',
+        'releaseNotes': 'Welcome to Local Sathi!',
+        'betaEnabled': false,
+      });
+    }
   }
 
   // Get user profile

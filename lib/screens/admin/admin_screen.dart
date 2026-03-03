@@ -23,14 +23,35 @@ class _AdminScreenState extends State<AdminScreen> {
   void initState() {
     super.initState();
     _loadStats();
+    _ensureVersionConfig();
   }
 
   Future<void> _loadStats() async {
     final stats = await _firestoreService.getAppStats();
-    setState(() {
-      _stats = stats;
-      _loadingStats = false;
-    });
+    if (mounted) {
+      setState(() {
+        _stats = stats;
+        _loadingStats = false;
+      });
+    }
+  }
+
+  /// Ensure version config exists in Firestore
+  Future<void> _ensureVersionConfig() async {
+    try {
+      final updateService = UpdateService();
+      final stream = updateService.getVersionConfig();
+      final config = await stream.first;
+      if (config == null) {
+        // Seed initial version config
+        await updateService.updateVersionConfig(AppVersionInfo(
+          currentVersion: '1.3.1',
+          minVersion: '1.0.0',
+          updateUrl: 'https://github.com/anirudhatalmale6-alt/local-sathi-app/releases',
+          releaseNotes: 'Welcome to Local Sathi!',
+        ));
+      }
+    } catch (_) {}
   }
 
   void _showUpdateConfigDialog(AppVersionInfo? existing) {

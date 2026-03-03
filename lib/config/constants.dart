@@ -18,4 +18,8 @@ class AppConstants {
   static const int maxPostLength = 280;
   static const String idPrefix = 'LS-';
   static const int startingId = 100001;
+
+  /// Phone numbers that automatically get admin role on registration
+  /// Add the owner's phone number here (without +91)
+  static const List<String> adminPhones = [];
 }

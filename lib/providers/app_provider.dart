@@ -37,6 +37,15 @@ class AppProvider extends ChangeNotifier {
     final user = _authService.currentUser;
     if (user != null) {
       _currentUser = await _authService.getUserProfile(user.uid);
+
+      // Auto-upgrade first user (LS-100001) to admin if not already
+      if (_currentUser != null &&
+          _currentUser!.localSathiId == 'LS-100001' &&
+          !_currentUser!.isAdmin) {
+        await _authService.updateUserProfile(user.uid, {'role': 'admin'});
+        _currentUser = await _authService.getUserProfile(user.uid);
+      }
+
       notifyListeners();
     }
   }

@@ -174,6 +174,7 @@ class _ComposeSheet extends StatefulWidget {
 class _ComposeSheetState extends State<_ComposeSheet> {
   final _textController = TextEditingController();
   int _charCount = 0;
+  bool _posting = false;
 
   @override
   void dispose() {
@@ -226,9 +227,11 @@ class _ComposeSheetState extends State<_ComposeSheet> {
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: _charCount > 0 ? () async {
+                  onPressed: (_charCount > 0 && !_posting) ? () async {
                     final text = _textController.text.trim();
                     if (text.isEmpty || user == null) return;
+
+                    setState(() => _posting = true);
 
                     final post = PostModel(
                       id: '',
@@ -255,6 +258,7 @@ class _ComposeSheetState extends State<_ComposeSheet> {
                       );
                     } catch (e) {
                       if (!context.mounted) return;
+                      setState(() => _posting = false);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('Failed to post: $e'),
@@ -267,7 +271,9 @@ class _ComposeSheetState extends State<_ComposeSheet> {
                       );
                     }
                   } : null,
-                  child: const Text('Post'),
+                  child: _posting
+                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Post'),
                 ),
               ],
             ),

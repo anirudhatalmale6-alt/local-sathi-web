@@ -287,7 +287,7 @@ class HomeScreen extends StatelessWidget {
               child: StreamBuilder<List<UserModel>>(
                 stream: firestoreService.getFeaturedProviders(limit: 5),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
                     return _buildEmptyProviders();
                   }
 

@@ -66,6 +66,21 @@ class FeedScreen extends StatelessWidget {
                   );
                 }
 
+                if (snapshot.hasError) {
+                  return SliverFillRemaining(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline, size: 48, color: AppColors.textMuted),
+                          const SizedBox(height: 12),
+                          Text('Could not load feed', style: TextStyle(fontSize: 14, color: AppColors.textMuted)),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
                 final posts = snapshot.data ?? [];
                 if (posts.isEmpty) {
                   return SliverFillRemaining(
