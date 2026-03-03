@@ -443,8 +443,11 @@ class ProfileScreen extends StatelessWidget {
 
     final nameCtrl = TextEditingController(text: user.name);
     final descCtrl = TextEditingController(text: user.serviceDescription ?? '');
-    final rateCtrl = TextEditingController(text: user.hourlyRate?.toInt().toString() ?? '');
+    final rateCtrl = TextEditingController(
+      text: user.hourlyRate != null ? user.hourlyRate!.toInt().toString() : '',
+    );
     final areaCtrl = TextEditingController(text: user.serviceArea ?? '');
+    bool saving = false;
 
     showModalBottomSheet(
       context: context,
@@ -452,87 +455,124 @@ class ProfileScreen extends StatelessWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE5E7EB),
-                    borderRadius: BorderRadius.circular(2),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text('Edit Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.text)),
-              const SizedBox(height: 16),
-              const Text('Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              TextField(
-                controller: nameCtrl,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(hintText: 'Your full name', isDense: true),
-              ),
-              if (user.isProvider) ...[
-                const SizedBox(height: 14),
-                const Text('Service Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 16),
+                const Text('Edit Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.text)),
+                const SizedBox(height: 16),
+                const Text('Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
                 TextField(
-                  controller: descCtrl,
-                  maxLines: 2,
-                  maxLength: 200,
-                  decoration: const InputDecoration(hintText: 'Describe your services', isDense: true),
+                  controller: nameCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(hintText: 'Your full name', isDense: true),
                 ),
-                const SizedBox(height: 8),
-                const Text('Rate per Visit', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: rateCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(hintText: 'e.g. 500', prefixText: '\u20B9 ', isDense: true),
-                ),
-                const SizedBox(height: 14),
-                const Text('Service Area', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: areaCtrl,
-                  decoration: const InputDecoration(hintText: 'e.g. Andheri West', isDense: true),
+                if (user.isProvider) ...[
+                  const SizedBox(height: 14),
+                  const Text('Service Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: descCtrl,
+                    maxLines: 2,
+                    maxLength: 200,
+                    decoration: const InputDecoration(hintText: 'Describe your services', isDense: true),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('Rate per Visit', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: rateCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(hintText: 'e.g. 500', prefixText: '\u20B9 ', isDense: true),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Service Area', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: areaCtrl,
+                    decoration: const InputDecoration(hintText: 'e.g. Andheri West', isDense: true),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            final name = nameCtrl.text.trim();
+                            if (name.isEmpty) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                const SnackBar(content: Text('Name cannot be empty'), backgroundColor: Colors.red),
+                              );
+                              return;
+                            }
+                            setSheetState(() => saving = true);
+                            try {
+                              final updates = <String, dynamic>{
+                                'name': name,
+                              };
+                              if (user.isProvider) {
+                                updates['serviceDescription'] = descCtrl.text.trim();
+                                updates['serviceArea'] = areaCtrl.text.trim();
+                                if (rateCtrl.text.isNotEmpty) {
+                                  updates['hourlyRate'] = double.tryParse(rateCtrl.text) ?? 0;
+                                }
+                              }
+                              await AuthService().updateUserProfile(user.uid, updates);
+                              await appProvider.loadCurrentUser();
+                              if (ctx.mounted) {
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('Profile updated successfully!'),
+                                    backgroundColor: AppColors.green,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setSheetState(() => saving = false);
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed to save: $e'),
+                                    backgroundColor: Colors.red,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: saving
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Save Changes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
                 ),
               ],
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    final updates = <String, dynamic>{
-                      'name': nameCtrl.text.trim(),
-                    };
-                    if (user.isProvider) {
-                      updates['serviceDescription'] = descCtrl.text.trim();
-                      updates['serviceArea'] = areaCtrl.text.trim();
-                      if (rateCtrl.text.isNotEmpty) {
-                        updates['hourlyRate'] = double.tryParse(rateCtrl.text) ?? 0;
-                      }
-                    }
-                    await AuthService().updateUserProfile(user.uid, updates);
-                    await appProvider.loadCurrentUser();
-                    if (ctx.mounted) Navigator.pop(ctx);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                  child: const Text('Save Changes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
