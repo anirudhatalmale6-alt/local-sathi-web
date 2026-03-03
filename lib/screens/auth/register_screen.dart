@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../config/theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/storage_service.dart';
 import '../home/main_shell.dart';
+import 'provider_onboarding_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String uid;
@@ -18,10 +21,14 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _authService = AuthService();
+  final _storageService = StorageService();
   bool _isLoading = false;
   bool _isProvider = false;
+  XFile? _aadhaarImageFile;
   File? _aadhaarImage;
   String _selectedCategory = 'Electrician';
+  bool _isUploading = false;
+  double _uploadProgress = 0;
 
   final _categories = [
     'Electrician', 'Plumber', 'Tutor', 'Carpenter',
@@ -30,9 +37,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _pickAadhaar() async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery);
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      imageQuality: 80,
+    );
     if (image != null) {
-      setState(() => _aadhaarImage = File(image.path));
+      setState(() {
+        _aadhaarImageFile = image;
+        if (!kIsWeb) _aadhaarImage = File(image.path);
+      });
     }
   }
 
@@ -46,13 +60,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Create user profile
       await _authService.createUserProfile(
         uid: widget.uid,
         name: name,
         phone: widget.phone,
       );
 
-      // If provider, update role
+      // If provider, update role and category
       if (_isProvider) {
         await _authService.updateUserProfile(widget.uid, {
           'role': 'provider',
@@ -60,14 +75,52 @@ class _RegisterScreenState extends State<RegisterScreen> {
         });
       }
 
-      // TODO: Upload Aadhaar image to Firebase Storage
+      // Upload Aadhaar if selected
+      if (_aadhaarImageFile != null) {
+        setState(() {
+          _isUploading = true;
+          _uploadProgress = 0.3;
+        });
+
+        try {
+          final downloadUrl = await _storageService.uploadAadhaarDoc(
+            widget.uid,
+            _aadhaarImageFile!,
+          );
+
+          setState(() => _uploadProgress = 0.8);
+
+          await _authService.updateUserProfile(widget.uid, {
+            'aadhaarDocUrl': downloadUrl,
+            'verificationStatus': 'pending',
+          });
+
+          setState(() => _uploadProgress = 1.0);
+        } catch (e) {
+          // Don't block registration if upload fails
+          debugPrint('Aadhaar upload failed: $e');
+        }
+      }
 
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainShell()),
-      );
+
+      // Route: providers go to onboarding, customers go to home
+      if (_isProvider) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ProviderOnboardingScreen(uid: widget.uid),
+          ),
+        );
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const MainShell()),
+        );
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _isUploading = false;
+      });
       _showError('Registration failed. Please try again.');
     }
   }
@@ -123,7 +176,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.04),
+                    color: Colors.black.withAlpha(10),
                     blurRadius: 16,
                   ),
                 ],
@@ -168,12 +221,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             if (_isProvider) ...[
               const SizedBox(height: 24),
               const Text(
-                'Service Category',
+                'Primary Service Category',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppColors.text,
                 ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'You can add more categories after registration',
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -229,7 +287,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: _pickAadhaar,
+              onTap: _isLoading ? null : _pickAadhaar,
               child: Container(
                 height: 120,
                 width: double.infinity,
@@ -237,18 +295,50 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: AppColors.tealLight,
+                    color: _aadhaarImageFile != null ? AppColors.green : AppColors.tealLight,
                     width: 1.5,
-                    style: BorderStyle.solid,
                   ),
                 ),
-                child: _aadhaarImage != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: Image.file(
-                          _aadhaarImage!,
-                          fit: BoxFit.cover,
-                        ),
+                child: _aadhaarImageFile != null
+                    ? Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: kIsWeb
+                                ? FutureBuilder<List<int>>(
+                                    future: _aadhaarImageFile!.readAsBytes(),
+                                    builder: (ctx, snap) {
+                                      if (snap.hasData) {
+                                        return Image.memory(
+                                          snap.data! as dynamic,
+                                          fit: BoxFit.cover,
+                                          width: double.infinity,
+                                          height: 120,
+                                        );
+                                      }
+                                      return const Center(child: CircularProgressIndicator());
+                                    },
+                                  )
+                                : Image.file(
+                                    _aadhaarImage!,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    height: 120,
+                                  ),
+                          ),
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: const BoxDecoration(
+                                color: AppColors.green,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.check, size: 16, color: Colors.white),
+                            ),
+                          ),
+                        ],
                       )
                     : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -256,7 +346,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           Icon(
                             Icons.cloud_upload_outlined,
                             size: 36,
-                            color: AppColors.teal.withOpacity(0.6),
+                            color: AppColors.teal.withAlpha(150),
                           ),
                           const SizedBox(height: 8),
                           const Text(
@@ -273,9 +363,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'You can skip this now and verify later from your profile.',
-              style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+              _isProvider
+                  ? 'Aadhaar verification is required for service providers.'
+                  : 'You can skip this now and verify later from your profile.',
+              style: TextStyle(
+                fontSize: 11,
+                color: _isProvider ? AppColors.orange : AppColors.textMuted,
+              ),
             ),
+
+            // Upload progress
+            if (_isUploading) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.teal),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Uploading Aadhaar document...',
+                    style: TextStyle(fontSize: 12, color: AppColors.tealDark),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              LinearProgressIndicator(
+                value: _uploadProgress,
+                backgroundColor: AppColors.tealLight,
+                valueColor: const AlwaysStoppedAnimation(AppColors.teal),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ],
 
             const SizedBox(height: 32),
 
@@ -299,9 +420,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Text(
-                        'Get Started',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    : Text(
+                        _isProvider ? 'Continue to Setup Profile' : 'Get Started',
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                       ),
               ),
             ),
@@ -318,7 +439,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? AppColors.teal.withOpacity(0.1) : AppColors.bg,
+          color: selected ? AppColors.teal.withAlpha(25) : AppColors.bg,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected ? AppColors.teal : const Color(0xFFE5E7EB),

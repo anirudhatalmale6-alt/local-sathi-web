@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../config/theme.dart';
 import '../../providers/app_provider.dart';
+import '../../services/auth_service.dart';
+import '../../services/storage_service.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
 
@@ -366,23 +372,49 @@ class ProfileScreen extends StatelessWidget {
   }
 
   void _showSettings(BuildContext context) {
+    final appProvider = context.read<AppProvider>();
+    final user = appProvider.currentUser;
+
     showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => Container(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE5E7EB),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.edit),
+              leading: const Icon(Icons.edit, color: AppColors.teal),
               title: const Text('Edit Profile'),
-              onTap: () => Navigator.pop(context),
+              onTap: () {
+                Navigator.pop(context);
+                _showEditProfileDialog(context);
+              },
             ),
-            ListTile(
-              leading: const Icon(Icons.verified_user),
-              title: const Text('Verify Aadhaar'),
-              onTap: () => Navigator.pop(context),
-            ),
+            if (user != null && !user.isVerified)
+              ListTile(
+                leading: const Icon(Icons.verified_user, color: AppColors.orange),
+                title: const Text('Verify Aadhaar'),
+                subtitle: Text(
+                  user.aadhaarDocUrl != null ? 'Verification pending' : 'Upload your Aadhaar card',
+                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAadhaarUploadDialog(context);
+                },
+              ),
             ListTile(
               leading: Icon(Icons.logout, color: AppColors.red),
               title: Text('Sign Out', style: TextStyle(color: AppColors.red)),
@@ -400,6 +432,262 @@ class ProfileScreen extends StatelessWidget {
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog(BuildContext context) {
+    final appProvider = context.read<AppProvider>();
+    final user = appProvider.currentUser;
+    if (user == null) return;
+
+    final nameCtrl = TextEditingController(text: user.name);
+    final descCtrl = TextEditingController(text: user.serviceDescription ?? '');
+    final rateCtrl = TextEditingController(text: user.hourlyRate?.toInt().toString() ?? '');
+    final areaCtrl = TextEditingController(text: user.serviceArea ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Edit Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.text)),
+              const SizedBox(height: 16),
+              const Text('Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: nameCtrl,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(hintText: 'Your full name', isDense: true),
+              ),
+              if (user.isProvider) ...[
+                const SizedBox(height: 14),
+                const Text('Service Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: descCtrl,
+                  maxLines: 2,
+                  maxLength: 200,
+                  decoration: const InputDecoration(hintText: 'Describe your services', isDense: true),
+                ),
+                const SizedBox(height: 8),
+                const Text('Rate per Visit', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: rateCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(hintText: 'e.g. 500', prefixText: '\u20B9 ', isDense: true),
+                ),
+                const SizedBox(height: 14),
+                const Text('Service Area', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: areaCtrl,
+                  decoration: const InputDecoration(hintText: 'e.g. Andheri West', isDense: true),
+                ),
+              ],
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final updates = <String, dynamic>{
+                      'name': nameCtrl.text.trim(),
+                    };
+                    if (user.isProvider) {
+                      updates['serviceDescription'] = descCtrl.text.trim();
+                      updates['serviceArea'] = areaCtrl.text.trim();
+                      if (rateCtrl.text.isNotEmpty) {
+                        updates['hourlyRate'] = double.tryParse(rateCtrl.text) ?? 0;
+                      }
+                    }
+                    await AuthService().updateUserProfile(user.uid, updates);
+                    await appProvider.loadCurrentUser();
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Save Changes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAadhaarUploadDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => const _AadhaarUploadSheet(),
+    );
+  }
+}
+
+class _AadhaarUploadSheet extends StatefulWidget {
+  const _AadhaarUploadSheet();
+
+  @override
+  State<_AadhaarUploadSheet> createState() => _AadhaarUploadSheetState();
+}
+
+class _AadhaarUploadSheetState extends State<_AadhaarUploadSheet> {
+  XFile? _imageFile;
+  File? _image;
+  bool _uploading = false;
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      imageQuality: 80,
+    );
+    if (image != null) {
+      setState(() {
+        _imageFile = image;
+        if (!kIsWeb) _image = File(image.path);
+      });
+    }
+  }
+
+  Future<void> _upload() async {
+    if (_imageFile == null) return;
+    setState(() => _uploading = true);
+
+    try {
+      final appProvider = context.read<AppProvider>();
+      final user = appProvider.currentUser!;
+      final storageService = StorageService();
+
+      final downloadUrl = await storageService.uploadAadhaarDoc(user.uid, _imageFile!);
+      await AuthService().updateUserProfile(user.uid, {
+        'aadhaarDocUrl': downloadUrl,
+        'verificationStatus': 'pending',
+      });
+      await appProvider.loadCurrentUser();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Aadhaar uploaded! Verification pending.'),
+            backgroundColor: AppColors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _uploading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Upload failed. Please try again.'),
+            backgroundColor: AppColors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE5E7EB),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Verify Aadhaar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.text)),
+          const SizedBox(height: 8),
+          Text(
+            'Upload a clear photo of your Aadhaar card. Our admin will verify it within 24 hours.',
+            style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: _uploading ? null : _pickImage,
+            child: Container(
+              height: 140,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppColors.bg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _imageFile != null ? AppColors.green : AppColors.tealLight,
+                  width: 1.5,
+                ),
+              ),
+              child: _imageFile != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: kIsWeb
+                          ? const Center(child: Icon(Icons.image, size: 40, color: AppColors.green))
+                          : Image.file(_image!, fit: BoxFit.cover, width: double.infinity, height: 140),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.cloud_upload_outlined, size: 40, color: AppColors.teal.withAlpha(150)),
+                        const SizedBox(height: 8),
+                        const Text('Tap to select Aadhaar photo', style: TextStyle(fontSize: 13, color: AppColors.textMuted)),
+                      ],
+                    ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _imageFile == null || _uploading ? null : _upload,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _uploading
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Upload & Submit', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
       ),
     );
   }
