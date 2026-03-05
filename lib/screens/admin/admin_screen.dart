@@ -27,12 +27,21 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _loadStats() async {
-    final stats = await _firestoreService.getAppStats();
-    if (mounted) {
-      setState(() {
-        _stats = stats;
-        _loadingStats = false;
-      });
+    try {
+      final stats = await _firestoreService.getAppStats();
+      if (mounted) {
+        setState(() {
+          _stats = stats;
+          _loadingStats = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load stats: $e');
+      if (mounted) {
+        setState(() {
+          _loadingStats = false;
+        });
+      }
     }
   }
 

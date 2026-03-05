@@ -375,34 +375,31 @@ class FirestoreService {
     return stateMap;
   }
 
-  // Get app stats
+  // Get app stats (client-side counting to avoid composite index requirements)
   Future<Map<String, int>> getAppStats() async {
-    final users = await _firestore.collection('users').count().get();
-    final pending = await _firestore
-        .collection('users')
-        .where('verificationStatus', isEqualTo: 'pending')
-        .where('aadhaarDocUrl', isNull: false)
-        .count()
-        .get();
-    final providers = await _firestore
-        .collection('users')
-        .where('role', isEqualTo: 'provider')
-        .where('verificationStatus', isEqualTo: 'verified')
-        .count()
-        .get();
+    // Fetch all users once and count client-side
+    final usersSnap = await _firestore.collection('users').get();
+    final allUsers = usersSnap.docs.map((d) => d.data()).toList();
+
+    final totalUsers = allUsers.length;
+    final pendingVerifications = allUsers.where((u) =>
+        u['verificationStatus'] == 'pending' && u['aadhaarDocUrl'] != null).length;
+    final activeProviders = allUsers.where((u) =>
+        u['role'] == 'provider' && u['verificationStatus'] == 'verified').length;
+
+    // Posts today
     final today = DateTime.now();
     final startOfDay = DateTime(today.year, today.month, today.day);
-    final posts = await _firestore
+    final postsSnap = await _firestore
         .collection('posts')
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
-        .count()
         .get();
 
     return {
-      'totalUsers': users.count ?? 0,
-      'pendingVerifications': pending.count ?? 0,
-      'activeProviders': providers.count ?? 0,
-      'postsToday': posts.count ?? 0,
+      'totalUsers': totalUsers,
+      'pendingVerifications': pendingVerifications,
+      'activeProviders': activeProviders,
+      'postsToday': postsSnap.docs.length,
     };
   }
 }
