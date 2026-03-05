@@ -319,6 +319,61 @@ class FirestoreService {
     await _firestore.collection('feedback').doc(feedbackId).delete();
   }
 
+  // ══════════════════ LIVE STATS ══════════════════
+
+  // Live community stats stream (for home screen bar)
+  Stream<Map<String, int>> getCommunityStatsStream() {
+    return _firestore.collection('users').snapshots().map((snap) {
+      final docs = snap.docs;
+      int total = docs.length;
+      int providers = 0;
+      int verified = 0;
+      for (final doc in docs) {
+        final data = doc.data();
+        if (data['role'] == 'provider') providers++;
+        if (data['verificationStatus'] == 'verified') verified++;
+      }
+      return {
+        'totalUsers': total,
+        'totalProviders': providers,
+        'verifiedProfiles': verified,
+      };
+    });
+  }
+
+  // Geographic breakdown (admin analytics)
+  Future<Map<String, dynamic>> getGeographicStats() async {
+    final snap = await _firestore.collection('users').get();
+    final stateMap = <String, Map<String, dynamic>>{};
+
+    for (final doc in snap.docs) {
+      final data = doc.data();
+      final state = (data['state'] as String?)?.trim() ?? '';
+      final city = (data['city'] as String?)?.trim() ?? '';
+      final role = data['role'] ?? 'customer';
+
+      if (state.isEmpty && city.isEmpty) continue;
+
+      final stateKey = state.isNotEmpty ? state : 'Unknown';
+      stateMap.putIfAbsent(stateKey, () => {'total': 0, 'providers': 0, 'cities': <String, Map<String, int>>{}});
+      stateMap[stateKey]!['total'] = (stateMap[stateKey]!['total'] as int) + 1;
+      if (role == 'provider') {
+        stateMap[stateKey]!['providers'] = (stateMap[stateKey]!['providers'] as int) + 1;
+      }
+
+      if (city.isNotEmpty) {
+        final cities = stateMap[stateKey]!['cities'] as Map<String, Map<String, int>>;
+        cities.putIfAbsent(city, () => {'total': 0, 'providers': 0});
+        cities[city]!['total'] = (cities[city]!['total'] ?? 0) + 1;
+        if (role == 'provider') {
+          cities[city]!['providers'] = (cities[city]!['providers'] ?? 0) + 1;
+        }
+      }
+    }
+
+    return stateMap;
+  }
+
   // Get app stats
   Future<Map<String, int>> getAppStats() async {
     final users = await _firestore.collection('users').count().get();

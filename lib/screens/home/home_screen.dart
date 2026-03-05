@@ -144,6 +144,56 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
 
+          // Live Community Stats Bar
+          SliverToBoxAdapter(
+            child: StreamBuilder<Map<String, int>>(
+              stream: firestoreService.getCommunityStatsStream(),
+              builder: (context, snapshot) {
+                final stats = snapshot.data;
+                return Container(
+                  margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(10),
+                        blurRadius: 12,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _liveStatItem(
+                        Icons.people_rounded,
+                        '${stats?['totalUsers'] ?? '-'}',
+                        'Members',
+                        AppColors.blue,
+                      ),
+                      Container(width: 1, height: 28, color: AppColors.bg),
+                      _liveStatItem(
+                        Icons.handyman_rounded,
+                        '${stats?['totalProviders'] ?? '-'}',
+                        'Providers',
+                        AppColors.orange,
+                      ),
+                      Container(width: 1, height: 28, color: AppColors.bg),
+                      _liveStatItem(
+                        Icons.verified_rounded,
+                        '${stats?['verifiedProfiles'] ?? '-'}',
+                        'Verified',
+                        AppColors.green,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
           // Section: Services
           SliverToBoxAdapter(
             child: Padding(
@@ -346,6 +396,39 @@ class HomeScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _liveStatItem(IconData icon, String value, String label, Color color) {
+    return Expanded(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                  height: 1,
+                ),
+              ),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 9,
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

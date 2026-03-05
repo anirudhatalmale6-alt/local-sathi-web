@@ -265,6 +265,11 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
             ),
 
+            // Geographic Analytics
+            _sectionTitle('Geographic Analytics'),
+            _buildGeographicAnalytics(),
+            const SizedBox(height: 16),
+
             // App Update Management
             _sectionTitle('App Update Management'),
             Padding(
@@ -451,6 +456,78 @@ class _AdminScreenState extends State<AdminScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildGeographicAnalytics() {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _firestoreService.getGeographicStats(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(child: CircularProgressIndicator(color: AppColors.teal)),
+          );
+        }
+
+        final geoStats = snapshot.data!;
+        if (geoStats.isEmpty) {
+          return _emptyState('No geographic data yet. Users will appear here as they register with location.');
+        }
+
+        // Sort states by total users descending
+        final sortedStates = geoStats.entries.toList()
+          ..sort((a, b) => ((b.value as Map)['total'] as int).compareTo((a.value as Map)['total'] as int));
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 16)],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Summary row
+                Row(
+                  children: [
+                    Icon(Icons.public_rounded, size: 20, color: AppColors.blue),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${sortedStates.length} State${sortedStates.length != 1 ? 's' : ''} • India',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // State list with expandable cities
+                ...sortedStates.map((entry) {
+                  final stateName = entry.key;
+                  final stateData = entry.value as Map<String, dynamic>;
+                  final total = stateData['total'] as int;
+                  final providers = stateData['providers'] as int;
+                  final cities = stateData['cities'] as Map<String, Map<String, int>>;
+
+                  // Sort cities by total
+                  final sortedCities = cities.entries.toList()
+                    ..sort((a, b) => (b.value['total'] ?? 0).compareTo(a.value['total'] ?? 0));
+
+                  return _GeoStateItem(
+                    stateName: stateName,
+                    total: total,
+                    providers: providers,
+                    cities: sortedCities,
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -841,6 +918,131 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Expandable state item for geographic analytics
+class _GeoStateItem extends StatefulWidget {
+  final String stateName;
+  final int total;
+  final int providers;
+  final List<MapEntry<String, Map<String, int>>> cities;
+
+  const _GeoStateItem({
+    required this.stateName,
+    required this.total,
+    required this.providers,
+    required this.cities,
+  });
+
+  @override
+  State<_GeoStateItem> createState() => _GeoStateItemState();
+}
+
+class _GeoStateItemState extends State<_GeoStateItem> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: widget.cities.isNotEmpty ? () => setState(() => _expanded = !_expanded) : null,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.location_city_rounded,
+                  size: 16,
+                  color: AppColors.teal,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.stateName,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.blueLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${widget.total}',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.blue),
+                  ),
+                ),
+                if (widget.providers > 0) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.orangeLight,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${widget.providers} SP',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.orange),
+                    ),
+                  ),
+                ],
+                if (widget.cities.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 6),
+                    child: Icon(
+                      _expanded ? Icons.expand_less : Icons.expand_more,
+                      size: 18,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded)
+          Padding(
+            padding: const EdgeInsets.only(left: 24, bottom: 8),
+            child: Column(
+              children: widget.cities.map((cityEntry) {
+                final cityName = cityEntry.key;
+                final cityTotal = cityEntry.value['total'] ?? 0;
+                final cityProviders = cityEntry.value['providers'] ?? 0;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      Icon(Icons.location_on_outlined, size: 14, color: AppColors.textMuted),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          cityName,
+                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                        ),
+                      ),
+                      Text(
+                        '$cityTotal users',
+                        style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                      ),
+                      if (cityProviders > 0) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          '($cityProviders SP)',
+                          style: TextStyle(fontSize: 11, color: AppColors.orange),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        if (!_expanded) Divider(height: 1, color: AppColors.bg),
+      ],
     );
   }
 }
