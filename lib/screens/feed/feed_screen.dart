@@ -128,11 +128,212 @@ class _PostCard extends StatelessWidget {
 
   const _PostCard({required this.post});
 
+  void _showPostMenu(BuildContext context, bool isOwner, bool isAdmin) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              if (isOwner) ...[
+                ListTile(
+                  leading: const Icon(Icons.edit, color: AppColors.teal),
+                  title: const Text('Edit Post'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showEditDialog(context);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.delete_outline, color: AppColors.red),
+                  title: Text('Delete Post', style: TextStyle(color: AppColors.red)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _confirmDelete(context);
+                  },
+                ),
+              ],
+              if (!isOwner && isAdmin)
+                ListTile(
+                  leading: Icon(Icons.delete_outline, color: AppColors.red),
+                  title: Text('Delete Post (Admin)', style: TextStyle(color: AppColors.red)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _confirmDelete(context);
+                  },
+                ),
+              if (!isOwner)
+                ListTile(
+                  leading: const Icon(Icons.flag_outlined, color: AppColors.orange),
+                  title: const Text('Report Post'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    FirestoreService().reportPost(post.id);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Post reported. Thank you.'),
+                        backgroundColor: AppColors.orange,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditDialog(BuildContext context) {
+    final controller = TextEditingController(text: post.text);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          bool saving = false;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE5E7EB),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Edit Post', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.text)),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  maxLines: 5,
+                  maxLength: 280,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: "What's on your mind?",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: saving ? null : () async {
+                      final newText = controller.text.trim();
+                      if (newText.isEmpty) return;
+                      setSheetState(() => saving = true);
+                      try {
+                        await FirestoreService().updatePost(post.id, newText);
+                        if (ctx.mounted) {
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('Post updated!'),
+                              backgroundColor: AppColors.green,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setSheetState(() => saving = false);
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Failed to update: $e'), backgroundColor: Colors.red),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: saving
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Text('Save Changes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _confirmDelete(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Post?'),
+        content: const Text('This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await FirestoreService().deletePost(post.id);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Post deleted'),
+                      backgroundColor: AppColors.green,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              }
+            },
+            child: Text('Delete', style: TextStyle(color: AppColors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final appProvider = context.read<AppProvider>();
     final currentUid = appProvider.currentUser?.uid;
     final isLiked = post.likedBy.contains(currentUid);
+    final isOwner = currentUid != null && post.authorUid == currentUid;
+    final isAdmin = appProvider.currentUser?.isAdmin ?? false;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -190,6 +391,14 @@ class _PostCard extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+              ),
+              // 3-dot menu
+              GestureDetector(
+                onTap: () => _showPostMenu(context, isOwner, isAdmin),
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Icon(Icons.more_vert, size: 20, color: AppColors.textMuted),
                 ),
               ),
             ],

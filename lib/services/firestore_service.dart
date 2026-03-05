@@ -119,6 +119,13 @@ class FirestoreService {
     });
   }
 
+  // Update a post's text
+  Future<void> updatePost(String postId, String newText) async {
+    await _firestore.collection('posts').doc(postId).update({
+      'text': newText,
+    });
+  }
+
   // Report a post
   Future<void> reportPost(String postId) async {
     await _firestore.collection('posts').doc(postId).update({

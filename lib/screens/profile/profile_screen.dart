@@ -251,11 +251,16 @@ class ProfileScreen extends StatelessWidget {
                     'Details',
                     Column(
                       children: [
-                        _detailRow(Icons.access_time, user.isProvider
-                            ? 'Mon-Sat, 8:00 AM - 8:00 PM'
-                            : 'Active member'),
+                        _detailRow(Icons.phone, user.phone),
+                        _detailRow(Icons.person, user.isProvider ? 'Service Provider' : (user.isAdmin ? 'Admin' : 'Customer')),
+                        if (user.isProvider && user.serviceDescription != null && user.serviceDescription!.isNotEmpty)
+                          _detailRow(Icons.description_outlined, user.serviceDescription!),
+                        if (user.isProvider)
+                          _detailRow(Icons.access_time, 'Mon-Sat, 8:00 AM - 8:00 PM'),
                         _detailRow(Icons.location_on,
-                            user.serviceArea ?? user.city ?? 'Location not set'),
+                            [user.serviceArea, user.city, user.state].where((s) => s != null && s.isNotEmpty).join(', ').isNotEmpty
+                                ? [user.serviceArea, user.city, user.state].where((s) => s != null && s.isNotEmpty).join(', ')
+                                : 'Location not set — tap Settings to add'),
                         if (user.hourlyRate != null)
                           _detailRow(Icons.currency_rupee,
                               '\u20B9${user.hourlyRate!.toInt()}/visit'),
