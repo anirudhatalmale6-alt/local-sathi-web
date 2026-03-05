@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../config/theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
 import '../home/main_shell.dart';
 import 'provider_onboarding_screen.dart';
@@ -26,14 +27,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isProvider = false;
   XFile? _aadhaarImageFile;
   File? _aadhaarImage;
-  String _selectedCategory = 'Electrician';
+  String _selectedCategory = '';
   bool _isUploading = false;
   double _uploadProgress = 0;
+  List<String> _categories = [];
+  bool _loadingCategories = true;
 
-  final _categories = [
-    'Electrician', 'Plumber', 'Tutor', 'Carpenter',
-    'Painter', 'AC Repair', 'Cleaner', 'Driver', 'Other',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final cats = await FirestoreService().getCategoryList();
+    if (mounted) {
+      setState(() {
+        _categories = [...cats, 'Other'];
+        _selectedCategory = cats.isNotEmpty ? cats.first : 'Other';
+        _loadingCategories = false;
+      });
+    }
+  }
 
   Future<void> _pickAadhaar() async {
     final picker = ImagePicker();

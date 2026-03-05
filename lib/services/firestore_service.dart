@@ -216,6 +216,18 @@ class FirestoreService {
         .map((snap) => snap.docs.map((d) => d.data()['name'] as String).toList());
   }
 
+  // Get categories as a one-shot future with fallback to defaults
+  Future<List<String>> getCategoryList() async {
+    try {
+      final snap = await _firestore.collection('categories').orderBy('name').get();
+      if (snap.docs.isNotEmpty) {
+        return snap.docs.map((d) => d.data()['name'] as String).toList();
+      }
+    } catch (_) {}
+    // Fallback to hardcoded defaults
+    return ['Electrician', 'Plumber', 'Tutor', 'Carpenter', 'Painter', 'AC Repair', 'Cleaner', 'Driver'];
+  }
+
   // Add category
   Future<void> addCategory(String name, String icon) async {
     await _firestore.collection('categories').add({

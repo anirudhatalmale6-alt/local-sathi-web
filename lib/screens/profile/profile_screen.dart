@@ -20,6 +20,31 @@ class ProfileScreen extends StatelessWidget {
     final user = appProvider.currentUser;
 
     if (user == null) {
+      final isLoading = appProvider.isLoading;
+      final error = appProvider.loadError;
+      if (error != null && !isLoading) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: AppColors.red),
+                const SizedBox(height: 12),
+                const Text('Could not load profile', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Text(error, style: TextStyle(fontSize: 12, color: AppColors.textMuted), textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => appProvider.loadCurrentUser(),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return const Center(child: CircularProgressIndicator(color: AppColors.teal));
     }
 

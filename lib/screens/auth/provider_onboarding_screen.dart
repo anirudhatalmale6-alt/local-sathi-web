@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../config/theme.dart';
 import '../../services/auth_service.dart';
+import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/location_service.dart';
 import '../home/main_shell.dart';
@@ -28,12 +29,8 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
   final _descriptionController = TextEditingController();
   final _rateController = TextEditingController();
   final _selectedCategories = <String>{};
-
-  final _allCategories = [
-    'Electrician', 'Plumber', 'Tutor', 'Carpenter', 'Painter',
-    'AC Repair', 'Cleaner', 'Driver', 'Cook', 'Mechanic',
-    'Tailor', 'Beautician', 'Gardener', 'Pest Control', 'Other',
-  ];
+  List<String> _allCategories = [];
+  bool _loadingCategories = true;
 
   // Step 2: Location
   final _areaController = TextEditingController();
@@ -46,6 +43,22 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
   // Step 3: Profile photo
   XFile? _profilePhotoFile;
   File? _profilePhoto;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    final cats = await FirestoreService().getCategoryList();
+    if (mounted) {
+      setState(() {
+        _allCategories = [...cats, 'Other'];
+        _loadingCategories = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -315,6 +328,11 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
             style: TextStyle(fontSize: 13, color: AppColors.textMuted),
           ),
           const SizedBox(height: 16),
+          if (_loadingCategories)
+            const Center(child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(color: AppColors.teal),
+            )),
           Wrap(
             spacing: 8,
             runSpacing: 8,

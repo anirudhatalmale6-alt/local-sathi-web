@@ -98,22 +98,49 @@ class AuthService {
     final versionDoc = await _firestore.collection('app_config').doc('version').get();
     if (!versionDoc.exists) {
       await _firestore.collection('app_config').doc('version').set({
-        'currentVersion': '1.3.1',
+        'currentVersion': '1.4.1',
         'minVersion': '1.0.0',
         'updateUrl': 'https://github.com/anirudhatalmale6-alt/local-sathi-app/releases',
         'releaseNotes': 'Welcome to Local Sathi!',
         'betaEnabled': false,
       });
     }
+
+    // Seed default categories if none exist
+    final catSnap = await _firestore.collection('categories').limit(1).get();
+    if (catSnap.docs.isEmpty) {
+      final defaultCategories = [
+        {'name': 'Electrician', 'icon': '⚡'},
+        {'name': 'Plumber', 'icon': '🔧'},
+        {'name': 'Tutor', 'icon': '📚'},
+        {'name': 'Carpenter', 'icon': '🪚'},
+        {'name': 'Painter', 'icon': '🎨'},
+        {'name': 'AC Repair', 'icon': '❄️'},
+        {'name': 'Cleaner', 'icon': '🧹'},
+        {'name': 'Driver', 'icon': '🚗'},
+      ];
+      final batch = _firestore.batch();
+      for (final cat in defaultCategories) {
+        batch.set(_firestore.collection('categories').doc(), {
+          ...cat,
+          'createdAt': Timestamp.fromDate(DateTime.now()),
+        });
+      }
+      await batch.commit();
+    }
   }
 
   // Get user profile
   Future<UserModel?> getUserProfile(String uid) async {
-    final doc = await _firestore.collection('users').doc(uid).get();
-    if (doc.exists) {
-      return UserModel.fromFirestore(doc);
+    try {
+      final doc = await _firestore.collection('users').doc(uid).get();
+      if (doc.exists && doc.data() != null) {
+        return UserModel.fromFirestore(doc);
+      }
+      return null;
+    } catch (e) {
+      rethrow;
     }
-    return null;
   }
 
   // Update user profile

@@ -33,20 +33,34 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  String? _loadError;
+  String? get loadError => _loadError;
+
   Future<void> loadCurrentUser() async {
     final user = _authService.currentUser;
     if (user != null) {
-      _currentUser = await _authService.getUserProfile(user.uid);
+      try {
+        _isLoading = true;
+        _loadError = null;
+        notifyListeners();
 
-      // Auto-upgrade first user (LS-100001) to admin if not already
-      if (_currentUser != null &&
-          _currentUser!.localSathiId == 'LS-100001' &&
-          !_currentUser!.isAdmin) {
-        await _authService.updateUserProfile(user.uid, {'role': 'admin'});
         _currentUser = await _authService.getUserProfile(user.uid);
-      }
 
-      notifyListeners();
+        // Auto-upgrade first user (LS-100001) to admin if not already
+        if (_currentUser != null &&
+            _currentUser!.localSathiId == 'LS-100001' &&
+            !_currentUser!.isAdmin) {
+          await _authService.updateUserProfile(user.uid, {'role': 'admin'});
+          _currentUser = await _authService.getUserProfile(user.uid);
+        }
+      } catch (e) {
+        debugPrint('Failed to load user profile: $e');
+        _loadError = e.toString();
+        _currentUser = null;
+      } finally {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
