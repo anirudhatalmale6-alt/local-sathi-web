@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
 import '../../models/review_model.dart';
@@ -42,13 +43,9 @@ class ProviderDetailScreen extends StatelessWidget {
                                     height: 36,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: Colors.white.withOpacity(0.15),
+                                      color: Colors.white.withAlpha(38),
                                     ),
-                                    child: const Icon(
-                                      Icons.arrow_back,
-                                      color: Colors.white,
-                                      size: 20,
-                                    ),
+                                    child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
                                   ),
                                 ),
                               ],
@@ -63,46 +60,26 @@ class ProviderDetailScreen extends StatelessWidget {
                           const SizedBox(height: 10),
                           Text(
                             provider.name,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white),
                           ),
                           const SizedBox(height: 3),
                           Text(
                             provider.serviceCategories.isNotEmpty
                                 ? provider.serviceCategories.first
                                 : 'Service Provider',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.white.withOpacity(0.8),
-                            ),
+                            style: TextStyle(fontSize: 13, color: Colors.white.withAlpha(204)),
                           ),
                           const SizedBox(height: 8),
-                          if (provider.isVerified)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.green.withOpacity(0.3),
-                                borderRadius: BorderRadius.circular(100),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.check, size: 14, color: AppColors.greenLight),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Aadhaar Verified',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.greenLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          // Verification badges row
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (provider.isVerified)
+                                _heroBadge(Icons.check_circle, 'Aadhaar Verified', AppColors.green),
+                              if (provider.isVerified) const SizedBox(width: 8),
+                              _heroBadge(Icons.phone_android, 'Phone Verified', AppColors.blue),
+                            ],
+                          ),
                           const SizedBox(height: 16),
                         ],
                       ),
@@ -110,26 +87,26 @@ class ProviderDetailScreen extends StatelessWidget {
                   ),
                 ),
 
-                // Stats row
+                // Rating card (Freelancer-style)
                 SliverToBoxAdapter(
-                  child: Container(
-                    color: AppColors.bg,
-                    padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _metaItem(provider.rating.toStringAsFixed(1), 'Rating'),
-                        _metaItem('${provider.reviewCount}', 'Reviews'),
-                        _metaItem(provider.serviceArea ?? 'Nearby', 'Area'),
-                      ],
-                    ),
+                  child: StreamBuilder<List<ReviewModel>>(
+                    stream: firestoreService.getProviderReviews(provider.uid),
+                    builder: (context, snapshot) {
+                      final reviews = snapshot.data ?? [];
+                      return _buildRatingCard(reviews);
+                    },
                   ),
                 ),
 
-                // Body
+                // Stats row
+                SliverToBoxAdapter(
+                  child: _buildStatsRow(),
+                ),
+
+                // Body content
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -140,12 +117,10 @@ class ProviderDetailScreen extends StatelessWidget {
                               const Icon(Icons.location_on, size: 16, color: AppColors.teal),
                               const SizedBox(width: 4),
                               Text(
-                                provider.serviceArea!,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.text,
-                                ),
+                                [provider.serviceArea, provider.city, provider.state]
+                                    .where((s) => s != null && s.isNotEmpty)
+                                    .join(', '),
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text),
                               ),
                             ],
                           ),
@@ -153,64 +128,42 @@ class ProviderDetailScreen extends StatelessWidget {
                         ],
 
                         // About
-                        if (provider.serviceDescription != null) ...[
+                        if (provider.serviceDescription != null && provider.serviceDescription!.isNotEmpty) ...[
                           Text(
                             provider.serviceDescription!,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
-                              height: 1.6,
-                            ),
+                            style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.6),
                           ),
                           const SizedBox(height: 20),
                         ],
 
                         // Services
                         if (provider.serviceCategories.isNotEmpty) ...[
-                          const Text(
-                            'Services Offered',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.text,
-                            ),
-                          ),
+                          const Text('Services Offered', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
                           const SizedBox(height: 8),
-                          ...provider.serviceCategories.map((s) => Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 6,
-                                      height: 6,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: AppColors.teal,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      s,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.text,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: provider.serviceCategories.map((s) => Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: AppColors.tealLight,
+                                borderRadius: BorderRadius.circular(100),
+                              ),
+                              child: Text(
+                                s,
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.tealDark),
+                              ),
+                            )).toList(),
+                          ),
                           const SizedBox(height: 20),
                         ],
 
-                        // Reviews
-                        const Text(
-                          'Reviews',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.text,
-                          ),
-                        ),
+                        // Verifications section
+                        _buildVerificationsSection(),
+                        const SizedBox(height: 20),
+
+                        // Reviews header
+                        const Text('Reviews', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
                         const SizedBox(height: 8),
                       ],
                     ),
@@ -227,17 +180,25 @@ class ProviderDetailScreen extends StatelessWidget {
                       if (reviews.isEmpty) {
                         return SliverToBoxAdapter(
                           child: Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(24),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Text(
-                              'No reviews yet. Be the first to review!',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textMuted,
-                              ),
+                            child: Column(
+                              children: [
+                                Icon(Icons.rate_review_outlined, size: 36, color: AppColors.textMuted),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'No reviews yet',
+                                  style: TextStyle(fontSize: 14, color: AppColors.textMuted, fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'Be the first to review this provider!',
+                                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -247,63 +208,7 @@ class ProviderDetailScreen extends StatelessWidget {
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             final review = reviews[index];
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      AvatarWidget(
-                                        photoUrl: review.reviewerPhotoUrl,
-                                        name: review.reviewerName,
-                                        size: 32,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            review.reviewerName,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.text,
-                                            ),
-                                          ),
-                                          Row(
-                                            children: List.generate(
-                                              5,
-                                              (i) => Icon(
-                                                Icons.star,
-                                                size: 12,
-                                                color: i < review.rating.round()
-                                                    ? AppColors.gold
-                                                    : AppColors.textMuted.withOpacity(0.3),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    review.text,
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
+                            return _buildReviewCard(review);
                           },
                           childCount: reviews.length,
                         ),
@@ -319,17 +224,10 @@ class ProviderDetailScreen extends StatelessWidget {
 
           // Bottom action bar
           Container(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              16,
-              20,
-              16 + MediaQuery.of(context).padding.bottom,
-            ),
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + MediaQuery.of(context).padding.bottom),
             decoration: BoxDecoration(
               color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Colors.black.withOpacity(0.06)),
-              ),
+              border: Border(top: BorderSide(color: Colors.black.withAlpha(15))),
             ),
             child: Row(
               children: [
@@ -341,9 +239,7 @@ class ProviderDetailScreen extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.green,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
                 ),
@@ -355,9 +251,7 @@ class ProviderDetailScreen extends StatelessWidget {
                         SnackBar(
                           content: const Text('Chat feature coming soon!'),
                           behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       );
                     },
@@ -366,9 +260,7 @@ class ProviderDetailScreen extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.teal,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
                 ),
@@ -380,27 +272,320 @@ class ProviderDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _metaItem(String value, String label) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.text,
+  // Freelancer-style rating card with breakdown
+  Widget _buildRatingCard(List<ReviewModel> reviews) {
+    final ratingValue = reviews.isNotEmpty
+        ? reviews.map((r) => r.rating).reduce((a, b) => a + b) / reviews.length
+        : provider.rating;
+    final reviewCount = reviews.isNotEmpty ? reviews.length : provider.reviewCount;
+
+    // Calculate rating distribution
+    final dist = <int, int>{5: 0, 4: 0, 3: 0, 2: 0, 1: 0};
+    for (final r in reviews) {
+      final star = r.rating.round().clamp(1, 5);
+      dist[star] = (dist[star] ?? 0) + 1;
+    }
+    final maxCount = dist.values.fold(0, (a, b) => a > b ? a : b);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 16, offset: const Offset(0, 4))],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left: big rating number
+          Column(
+            children: [
+              Text(
+                ratingValue.toStringAsFixed(1),
+                style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w900, color: AppColors.text, height: 1),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: List.generate(5, (i) => Icon(
+                  i < ratingValue.round() ? Icons.star_rounded : Icons.star_outline_rounded,
+                  size: 16,
+                  color: i < ratingValue.round() ? AppColors.gold : AppColors.textMuted,
+                )),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$reviewCount review${reviewCount != 1 ? 's' : ''}',
+                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: AppColors.textMuted,
+          const SizedBox(width: 20),
+          // Right: rating bars
+          Expanded(
+            child: Column(
+              children: [5, 4, 3, 2, 1].map((star) {
+                final count = dist[star] ?? 0;
+                final fraction = maxCount > 0 ? count / maxCount : 0.0;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Text('$star', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+                      const SizedBox(width: 4),
+                      Icon(Icons.star_rounded, size: 12, color: AppColors.gold),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: fraction,
+                            minHeight: 8,
+                            backgroundColor: AppColors.bg,
+                            valueColor: AlwaysStoppedAnimation(
+                              star >= 4 ? AppColors.green : (star >= 3 ? AppColors.gold : AppColors.orange),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        width: 20,
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
+  }
+
+  // Stats row (Freelancer-inspired)
+  Widget _buildStatsRow() {
+    final memberSince = DateFormat('MMM yyyy').format(provider.createdAt);
+    final hasRate = provider.hourlyRate != null && provider.hourlyRate! > 0;
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 16, offset: const Offset(0, 4))],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _statBadge(Icons.calendar_month_rounded, memberSince, 'Member Since', AppColors.blue),
+          _divider(),
+          _statBadge(
+            Icons.currency_rupee_rounded,
+            hasRate ? '${provider.hourlyRate!.toInt()}' : '-',
+            'Per Visit',
+            AppColors.green,
+          ),
+          _divider(),
+          _statBadge(
+            Icons.workspace_premium_rounded,
+            provider.isVerified ? 'Yes' : 'No',
+            'Verified',
+            provider.isVerified ? AppColors.green : AppColors.textMuted,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statBadge(IconData icon, String value, String label, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.text),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() {
+    return Container(width: 1, height: 36, color: AppColors.bg);
+  }
+
+  // Verifications section
+  Widget _buildVerificationsSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 16)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Verifications', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+          const SizedBox(height: 12),
+          _verificationRow(Icons.phone_android, 'Phone Number', true),
+          _verificationRow(Icons.badge_outlined, 'Aadhaar Card', provider.isVerified),
+          _verificationRow(Icons.shield_outlined, 'Local Sathi ID', true),
+          _verificationRow(Icons.location_on_outlined, 'Location', provider.serviceArea != null),
+          _verificationRow(Icons.photo_camera_outlined, 'Profile Photo', provider.profilePhotoUrl != null),
+        ],
+      ),
+    );
+  }
+
+  Widget _verificationRow(IconData icon, String label, bool verified) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: verified ? AppColors.green : AppColors.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: verified ? AppColors.text : AppColors.textMuted,
+              ),
+            ),
+          ),
+          Icon(
+            verified ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+            size: 18,
+            color: verified ? AppColors.green : AppColors.textMuted,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(ReviewModel review) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AvatarWidget(
+                photoUrl: review.reviewerPhotoUrl,
+                name: review.reviewerName,
+                size: 36,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      review.reviewerName,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _timeAgo(review.createdAt),
+                      style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              // Star rating badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _ratingColor(review.rating).withAlpha(25),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.star_rounded, size: 14, color: _ratingColor(review.rating)),
+                    const SizedBox(width: 3),
+                    Text(
+                      review.rating.toStringAsFixed(1),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _ratingColor(review.rating),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (review.text.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              review.text,
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _ratingColor(double rating) {
+    if (rating >= 4) return AppColors.green;
+    if (rating >= 3) return AppColors.gold;
+    return AppColors.orange;
+  }
+
+  Widget _heroBadge(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(77),
+        borderRadius: BorderRadius.circular(100),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _timeAgo(DateTime dateTime) {
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    if (diff.inDays < 30) return '${(diff.inDays / 7).floor()}w ago';
+    return DateFormat('d MMM yyyy').format(dateTime);
   }
 
   void _launchCall(BuildContext context) async {

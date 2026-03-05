@@ -181,18 +181,18 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
 
-            // Stats card
+            // Stats card (Freelancer-style)
             Transform.translate(
               offset: const Offset(0, -16),
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
+                      color: Colors.black.withAlpha(15),
                       blurRadius: 16,
                       offset: const Offset(0, 4),
                     ),
@@ -201,14 +201,27 @@ class ProfileScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _statItem('${user.reviewCount}', 'Reviews'),
-                    Container(width: 1, height: 30, color: AppColors.bg),
-                    _statItem('${user.rating} \u2605', 'Rating'),
-                    Container(width: 1, height: 30, color: AppColors.bg),
-                    _statItem(
-                      "${_monthName(user.createdAt.month)} '${user.createdAt.year.toString().substring(2)}",
-                      'Member Since',
+                    _statItemRich(
+                      '${user.rating.toStringAsFixed(1)} \u2605',
+                      'Rating',
+                      user.rating >= 4 ? AppColors.green : (user.rating >= 3 ? AppColors.gold : AppColors.orange),
                     ),
+                    Container(width: 1, height: 30, color: AppColors.bg),
+                    _statItemRich('${user.reviewCount}', 'Reviews', AppColors.blue),
+                    Container(width: 1, height: 30, color: AppColors.bg),
+                    _statItemRich(
+                      "${_monthName(user.createdAt.month)} '${user.createdAt.year.toString().substring(2)}",
+                      'Joined',
+                      AppColors.teal,
+                    ),
+                    if (user.isProvider) ...[
+                      Container(width: 1, height: 30, color: AppColors.bg),
+                      _statItemRich(
+                        user.isVerified ? '\u2713' : '-',
+                        'Verified',
+                        user.isVerified ? AppColors.green : AppColors.textMuted,
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -319,26 +332,27 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _statItem(String value, String label) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
-            color: AppColors.text,
+  Widget _statItemRich(String value, String label, Color accentColor) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: accentColor,
+            ),
+            textAlign: TextAlign.center,
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: AppColors.textMuted,
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+            textAlign: TextAlign.center,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
