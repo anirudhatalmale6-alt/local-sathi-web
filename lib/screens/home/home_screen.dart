@@ -7,6 +7,7 @@ import '../../services/firestore_service.dart';
 import '../../models/user_model.dart';
 import '../../widgets/provider_card.dart';
 import '../../widgets/feedback_bar.dart';
+import '../notifications/notifications_screen.dart';
 import '../provider_detail/provider_detail_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -49,39 +50,27 @@ class HomeScreen extends StatelessWidget {
                               color: Colors.white,
                             ),
                           ),
-                          Container(
-                            width: 38,
-                            height: 38,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withOpacity(0.15),
-                            ),
-                            child: Stack(
-                              children: [
-                                const Center(
-                                  child: Icon(
-                                    Icons.notifications_outlined,
-                                    color: Colors.white,
-                                    size: 22,
-                                  ),
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                              );
+                            },
+                            child: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withOpacity(0.15),
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.notifications_outlined,
+                                  color: Colors.white,
+                                  size: 22,
                                 ),
-                                Positioned(
-                                  top: 6,
-                                  right: 8,
-                                  child: Container(
-                                    width: 8,
-                                    height: 8,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: AppColors.orange,
-                                      border: Border.all(
-                                        color: AppColors.teal,
-                                        width: 1.5,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ),
                         ],

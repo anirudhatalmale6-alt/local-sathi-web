@@ -78,14 +78,18 @@ class AppProvider extends ChangeNotifier {
           _city = address['city'] ?? '';
           _state = address['state'] ?? '';
         }
-        notifyListeners();
+      }
+      // If location detection returned null or city is still empty, use user's profile location
+      if (_city.isEmpty) {
+        _city = _currentUser?.city ?? 'India';
+        _state = _currentUser?.state ?? '';
       }
     } catch (e) {
-      // Location failed, use default
-      _city = 'Mumbai';
-      _state = 'Maharashtra';
-      notifyListeners();
+      // Location failed, use profile location or default
+      _city = _currentUser?.city ?? 'India';
+      _state = _currentUser?.state ?? '';
     }
+    notifyListeners();
   }
 
   Future<void> signOut() async {

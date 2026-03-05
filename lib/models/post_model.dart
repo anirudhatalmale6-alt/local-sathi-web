@@ -13,6 +13,7 @@ class PostModel {
   final List<String> likedBy;
   final bool isReported;
   final int reportCount;
+  final String? location;
   final DateTime createdAt;
 
   PostModel({
@@ -28,6 +29,7 @@ class PostModel {
     this.likedBy = const [],
     this.isReported = false,
     this.reportCount = 0,
+    this.location,
     required this.createdAt,
   });
 
@@ -46,6 +48,7 @@ class PostModel {
       likedBy: List<String>.from(data['likedBy'] ?? []),
       isReported: data['isReported'] ?? false,
       reportCount: data['reportCount'] ?? 0,
+      location: data['location'],
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
@@ -63,6 +66,7 @@ class PostModel {
       'likedBy': likedBy,
       'isReported': isReported,
       'reportCount': reportCount,
+      'location': location,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }

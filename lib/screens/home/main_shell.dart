@@ -233,12 +233,18 @@ class _ComposeSheetState extends State<_ComposeSheet> {
 
                     setState(() => _posting = true);
 
+                    final appProv = context.read<AppProvider>();
+                    final locationStr = appProv.city.isNotEmpty
+                        ? '${appProv.city}, ${appProv.state}'.trim().replaceAll(RegExp(r',\s*$'), '')
+                        : null;
+
                     final post = PostModel(
                       id: '',
                       authorUid: user.uid,
                       authorName: user.name,
                       authorLocalSathiId: user.localSathiId,
                       text: text,
+                      location: locationStr,
                       createdAt: DateTime.now(),
                     );
 
@@ -330,9 +336,21 @@ class _ComposeSheetState extends State<_ComposeSheet> {
 
             // Footer
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.location_on, color: AppColors.teal, size: 22),
+                Icon(Icons.location_on, color: AppColors.teal, size: 18),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    context.read<AppProvider>().city.isNotEmpty
+                        ? '${context.read<AppProvider>().city}, ${context.read<AppProvider>().state}'
+                        : 'Location not detected',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.teal,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 Text(
                   '$_charCount / 280',
                   style: TextStyle(

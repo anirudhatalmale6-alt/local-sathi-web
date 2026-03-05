@@ -14,8 +14,8 @@ class LocationService {
     if (permission == LocationPermission.deniedForever) return null;
 
     return await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
+      desiredAccuracy: LocationAccuracy.medium,
+    ).timeout(const Duration(seconds: 10));
   }
 
   static Future<Map<String, String>?> getAddressFromCoordinates(

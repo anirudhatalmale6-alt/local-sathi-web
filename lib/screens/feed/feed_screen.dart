@@ -383,12 +383,28 @@ class _PostCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 1),
-                    Text(
-                      _timeAgo(post.createdAt),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textMuted,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          _timeAgo(post.createdAt),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                        if (post.location != null && post.location!.isNotEmpty) ...[
+                          Text(' · ', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                          Icon(Icons.location_on, size: 11, color: AppColors.textMuted),
+                          const SizedBox(width: 1),
+                          Flexible(
+                            child: Text(
+                              post.location!,
+                              style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
