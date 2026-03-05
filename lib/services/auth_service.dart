@@ -100,7 +100,7 @@ class AuthService {
       await _firestore.collection('app_config').doc('version').set({
         'currentVersion': '1.4.1',
         'minVersion': '1.0.0',
-        'updateUrl': 'https://github.com/anirudhatalmale6-alt/local-sathi-app/releases',
+        'updateUrl': 'https://github.com/anirudhatalmale6-alt/local-sathi-web/releases/latest',
         'releaseNotes': 'Welcome to Local Sathi!',
         'betaEnabled': false,
       });

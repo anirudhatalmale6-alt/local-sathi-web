@@ -8,6 +8,8 @@ import '../../config/theme.dart';
 import '../../providers/app_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/storage_service.dart';
+import '../../services/update_service.dart';
+import '../../widgets/update_dialog.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
 
@@ -460,6 +462,18 @@ class ProfileScreen extends StatelessWidget {
                 },
               ),
             ListTile(
+              leading: const Icon(Icons.system_update, color: AppColors.teal),
+              title: const Text('Check for Updates'),
+              subtitle: Text(
+                'v1.6.1',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _checkForUpdates(context);
+              },
+            ),
+            ListTile(
               leading: Icon(Icons.logout, color: AppColors.red),
               title: Text('Sign Out', style: TextStyle(color: AppColors.red)),
               onTap: () async {
@@ -621,6 +635,54 @@ class ProfileScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  void _checkForUpdates(BuildContext context) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.teal)),
+    );
+
+    try {
+      final updateService = UpdateService();
+      final result = await updateService.checkForUpdate();
+
+      if (!context.mounted) return;
+      Navigator.pop(context); // dismiss loading
+
+      if (result.type != UpdateType.none && result.info != null) {
+        showDialog(
+          context: context,
+          barrierDismissible: result.type != UpdateType.forced,
+          builder: (_) => UpdateDialog(
+            updateType: result.type,
+            versionInfo: result.info!,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('You\'re on the latest version!'),
+            backgroundColor: AppColors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // dismiss loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Could not check for updates. Try again later.'),
+            backgroundColor: AppColors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   void _showAadhaarUploadDialog(BuildContext context) {

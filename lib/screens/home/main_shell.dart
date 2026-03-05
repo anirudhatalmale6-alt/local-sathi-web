@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/post_model.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../services/update_service.dart';
+import '../../widgets/update_dialog.dart';
 import 'home_screen.dart';
 import '../search/search_screen.dart';
 import '../feed/feed_screen.dart';
@@ -32,7 +35,32 @@ class _MainShellState extends State<MainShell> {
       final appProvider = context.read<AppProvider>();
       appProvider.loadCurrentUser();
       appProvider.loadLocation();
+      _checkForUpdates();
     });
+  }
+
+  Future<void> _checkForUpdates() async {
+    if (kIsWeb) return;
+    // Small delay so UI renders first
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    try {
+      final updateService = UpdateService();
+      final result = await updateService.checkForUpdate();
+      if (mounted && result.type != UpdateType.none && result.info != null) {
+        showDialog(
+          context: context,
+          barrierDismissible: result.type != UpdateType.forced,
+          builder: (_) => UpdateDialog(
+            updateType: result.type,
+            versionInfo: result.info!,
+          ),
+        );
+      }
+    } catch (_) {
+      // Update check failed silently
+    }
   }
 
   void _onNavTap(int index) {
