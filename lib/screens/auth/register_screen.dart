@@ -12,8 +12,9 @@ import 'provider_onboarding_screen.dart';
 class RegisterScreen extends StatefulWidget {
   final String uid;
   final String phone;
+  final String initialRole;
 
-  const RegisterScreen({super.key, required this.uid, required this.phone});
+  const RegisterScreen({super.key, required this.uid, required this.phone, this.initialRole = 'customer'});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -24,7 +25,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _authService = AuthService();
   final _storageService = StorageService();
   bool _isLoading = false;
-  bool _isProvider = false;
+  late bool _isProvider = widget.initialRole == 'provider';
   XFile? _aadhaarImageFile;
   File? _aadhaarImage;
   String _selectedCategory = '';

@@ -6,7 +6,7 @@ import 'package:sms_autofill/sms_autofill.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../services/auth_service.dart';
-import '../auth/register_screen.dart';
+import '../auth/welcome_screen.dart';
 import '../home/main_shell.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -136,10 +136,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         MaterialPageRoute(builder: (_) => const MainShell()),
       );
     } else {
-      // New user - go to registration
+      // New user - go to welcome/onboarding
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => RegisterScreen(
+          builder: (_) => WelcomeScreen(
             uid: userCred.user!.uid,
             phone: userCred.user!.phoneNumber ?? _phoneController.text,
           ),

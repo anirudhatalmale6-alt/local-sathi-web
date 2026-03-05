@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 import '../models/post_model.dart';
+import '../models/comment_model.dart';
 import '../models/review_model.dart';
 import '../models/feedback_model.dart';
 
@@ -132,6 +133,40 @@ class FirestoreService {
       'reportCount': FieldValue.increment(1),
       'isReported': true,
     });
+  }
+
+  // ══════════════════ COMMENTS ══════════════════
+
+  // Get comments for a post
+  Stream<List<CommentModel>> getPostComments(String postId) {
+    return _firestore
+        .collection('posts')
+        .doc(postId)
+        .collection('comments')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => CommentModel.fromFirestore(d)).toList());
+  }
+
+  // Add a comment to a post
+  Future<void> addComment(String postId, CommentModel comment) async {
+    final batch = _firestore.batch();
+    final commentRef = _firestore.collection('posts').doc(postId).collection('comments').doc();
+    batch.set(commentRef, comment.toFirestore());
+    batch.update(_firestore.collection('posts').doc(postId), {
+      'commentCount': FieldValue.increment(1),
+    });
+    await batch.commit();
+  }
+
+  // Delete a comment
+  Future<void> deleteComment(String postId, String commentId) async {
+    final batch = _firestore.batch();
+    batch.delete(_firestore.collection('posts').doc(postId).collection('comments').doc(commentId));
+    batch.update(_firestore.collection('posts').doc(postId), {
+      'commentCount': FieldValue.increment(-1),
+    });
+    await batch.commit();
   }
 
   // ══════════════════ REVIEWS ══════════════════

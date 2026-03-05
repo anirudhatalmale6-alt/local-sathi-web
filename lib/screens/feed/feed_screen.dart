@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../config/theme.dart';
 import '../../models/post_model.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/verified_badge.dart';
+import 'comments_sheet.dart';
 
 class FeedScreen extends StatelessWidget {
   const FeedScreen({super.key});
@@ -459,14 +461,24 @@ class _PostCard extends StatelessWidget {
                   icon: Icons.chat_bubble_outline,
                   label: '${post.commentCount}',
                   color: AppColors.textMuted,
-                  onTap: () {},
+                  onTap: () {
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => CommentsSheet(post: post),
+                    );
+                  },
                 ),
                 const SizedBox(width: 20),
                 _actionButton(
                   icon: Icons.share_outlined,
                   label: 'Share',
                   color: AppColors.textMuted,
-                  onTap: () {},
+                  onTap: () {
+                    final shareText = '${post.authorName} on Local Sathi:\n\n"${post.text}"\n\nDownload Local Sathi - Your Community Companion!';
+                    Share.share(shareText);
+                  },
                 ),
               ],
             ),
