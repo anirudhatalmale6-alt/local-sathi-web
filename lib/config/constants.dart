@@ -3,16 +3,36 @@ class AppConstants {
   static const String taglineHindi = 'अपना शहर का अपना नेटवर्क';
   static const String taglineEnglish = 'your community companion';
 
+  // Featured categories shown on home screen grid (9 items)
   static const List<Map<String, dynamic>> categories = [
     {'name': 'Electrician', 'icon': '⚡', 'color': 0xFFE3F2FD},
     {'name': 'Plumber', 'icon': '🔧', 'color': 0xFFE0F2F1},
-    {'name': 'Tutor', 'icon': '📚', 'color': 0xFFFFF3E0},
-    {'name': 'Carpenter', 'icon': '🪚', 'color': 0xFFEFEBE9},
-    {'name': 'Painter', 'icon': '🎨', 'color': 0xFFFCE4EC},
-    {'name': 'AC Repair', 'icon': '❄️', 'color': 0xFFE1F5FE},
     {'name': 'Cleaner', 'icon': '🧹', 'color': 0xFFF3E5F5},
-    {'name': 'Driver', 'icon': '🚗', 'color': 0xFFE8F5E9},
+    {'name': 'Cook / Maid', 'icon': '🍳', 'color': 0xFFFFF3E0},
+    {'name': 'Carpenter', 'icon': '🪚', 'color': 0xFFEFEBE9},
+    {'name': 'AC Repair', 'icon': '❄️', 'color': 0xFFE1F5FE},
+    {'name': 'Home Tutor', 'icon': '📚', 'color': 0xFFFFF8E1},
+    {'name': 'Beauty', 'icon': '💄', 'color': 0xFFFCE4EC},
     {'name': 'More', 'icon': '➕', 'color': 0xFFF5F5F5},
+  ];
+
+  // Full category list for registration, search, and admin
+  static const List<String> allCategories = [
+    // Existing
+    'Electrician', 'Plumber', 'Carpenter', 'Painter', 'AC Repair', 'Driver',
+    // Home Services
+    'House Cleaning', 'Cook / Maid', 'Babysitter', 'Elderly Care', 'Laundry / Iron Service',
+    // Repair Services
+    'Mobile Repair', 'Laptop / Computer Repair', 'TV Repair',
+    'Fridge / Washing Machine Repair', 'RO Water Purifier Service',
+    // Transport
+    'Taxi / Cab', 'Bike Taxi', 'Goods Transport / Pickup', 'Packers & Movers',
+    // Outdoor
+    'Gardener', 'Security Guard', 'Pest Control', 'CCTV Installation',
+    // Education
+    'Home Tutor', 'Yoga Teacher', 'Dance Teacher', 'Music Teacher',
+    // Personal Services
+    'Beauty Parlour at Home', 'Mehndi Artist', 'Tailor / Stitching', 'Makeup Artist',
   ];
 
   static const int maxPostLength = 280;

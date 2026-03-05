@@ -109,16 +109,9 @@ class AuthService {
     // Seed default categories if none exist
     final catSnap = await _firestore.collection('categories').limit(1).get();
     if (catSnap.docs.isEmpty) {
-      final defaultCategories = [
-        {'name': 'Electrician', 'icon': '⚡'},
-        {'name': 'Plumber', 'icon': '🔧'},
-        {'name': 'Tutor', 'icon': '📚'},
-        {'name': 'Carpenter', 'icon': '🪚'},
-        {'name': 'Painter', 'icon': '🎨'},
-        {'name': 'AC Repair', 'icon': '❄️'},
-        {'name': 'Cleaner', 'icon': '🧹'},
-        {'name': 'Driver', 'icon': '🚗'},
-      ];
+      final defaultCategories = AppConstants.allCategories
+          .map((name) => {'name': name, 'icon': '🔹'})
+          .toList();
       final batch = _firestore.batch();
       for (final cat in defaultCategories) {
         batch.set(_firestore.collection('categories').doc(), {

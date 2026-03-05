@@ -246,19 +246,11 @@ class ProviderDetailScreen extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Chat feature coming soon!'),
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      );
-                    },
+                    onPressed: () => _launchWhatsApp(context),
                     icon: const Icon(Icons.chat, size: 18),
-                    label: const Text('Chat'),
+                    label: const Text('WhatsApp'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.teal,
+                      backgroundColor: const Color(0xFF25D366),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
@@ -592,6 +584,18 @@ class ProviderDetailScreen extends StatelessWidget {
     final uri = Uri(scheme: 'tel', path: provider.phone);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
+    }
+  }
+
+  void _launchWhatsApp(BuildContext context) async {
+    // Format phone for WhatsApp (remove +, spaces)
+    final phone = provider.phone.replaceAll(RegExp(r'[^0-9]'), '');
+    final message = Uri.encodeComponent(
+      'Hi ${provider.name}, I found you on Local Sathi. I need help with ${provider.serviceCategories.isNotEmpty ? provider.serviceCategories.first : "a service"}.',
+    );
+    final uri = Uri.parse('https://wa.me/$phone?text=$message');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 }

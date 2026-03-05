@@ -27,7 +27,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allCategories = ['All', ...AppConstants.categories.map((c) => c['name'] as String).where((n) => n != 'More')];
+    final allCategories = ['All', ...AppConstants.allCategories];
 
     return Scaffold(
       backgroundColor: AppColors.bg,

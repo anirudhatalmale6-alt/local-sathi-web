@@ -4,6 +4,7 @@ import '../models/post_model.dart';
 import '../models/comment_model.dart';
 import '../models/review_model.dart';
 import '../models/feedback_model.dart';
+import '../config/constants.dart';
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -266,8 +267,8 @@ class FirestoreService {
         return snap.docs.map((d) => d.data()['name'] as String).toList();
       }
     } catch (_) {}
-    // Fallback to hardcoded defaults
-    return ['Electrician', 'Plumber', 'Tutor', 'Carpenter', 'Painter', 'AC Repair', 'Cleaner', 'Driver'];
+    // Fallback to comprehensive defaults from constants
+    return AppConstants.allCategories.toList();
   }
 
   // Add category
