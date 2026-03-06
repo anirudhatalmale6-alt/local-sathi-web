@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../config/theme.dart';
+import '../../models/user_model.dart';
 import '../../providers/app_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/storage_service.dart';
@@ -91,30 +92,38 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ),
 
-                      // Avatar
+                      // Avatar with profile photo
                       Container(
                         width: 90,
                         height: 90,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: const LinearGradient(
-                            colors: [AppColors.orange, Color(0xFFFF9800)],
-                          ),
+                          gradient: user.profilePhotoUrl == null
+                              ? const LinearGradient(colors: [AppColors.orange, Color(0xFFFF9800)])
+                              : null,
                           border: Border.all(
                             color: Colors.white.withOpacity(0.3),
                             width: 4,
                           ),
+                          image: user.profilePhotoUrl != null
+                              ? DecorationImage(
+                                  image: NetworkImage(user.profilePhotoUrl!),
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
                         ),
-                        child: Center(
-                          child: Text(
-                            user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
-                            style: const TextStyle(
-                              fontSize: 36,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+                        child: user.profilePhotoUrl == null
+                            ? Center(
+                                child: Text(
+                                  user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                                  style: const TextStyle(
+                                    fontSize: 36,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              )
+                            : null,
                       ),
                       const SizedBox(height: 12),
 
@@ -481,7 +490,7 @@ class ProfileScreen extends StatelessWidget {
               leading: const Icon(Icons.system_update, color: AppColors.teal),
               title: const Text('Check for Updates'),
               subtitle: Text(
-                'v1.9.0',
+                'v1.9.1',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
               onTap: () {
@@ -515,140 +524,10 @@ class ProfileScreen extends StatelessWidget {
     final user = appProvider.currentUser;
     if (user == null) return;
 
-    final nameCtrl = TextEditingController(text: user.name);
-    final descCtrl = TextEditingController(text: user.serviceDescription ?? '');
-    final rateCtrl = TextEditingController(
-      text: user.hourlyRate != null ? user.hourlyRate!.toInt().toString() : '',
-    );
-    final areaCtrl = TextEditingController(text: user.serviceArea ?? '');
-    bool saving = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE5E7EB),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text('Edit Profile', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.text)),
-                const SizedBox(height: 16),
-                const Text('Name', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: nameCtrl,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(hintText: 'Your full name', isDense: true),
-                ),
-                if (user.isProvider) ...[
-                  const SizedBox(height: 14),
-                  const Text('Service Description', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: descCtrl,
-                    maxLines: 2,
-                    maxLength: 200,
-                    decoration: const InputDecoration(hintText: 'Describe your services', isDense: true),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text('Rate per Visit', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: rateCtrl,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(hintText: 'e.g. 500', prefixText: '\u20B9 ', isDense: true),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('Service Area', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  TextField(
-                    controller: areaCtrl,
-                    decoration: const InputDecoration(hintText: 'e.g. Andheri West', isDense: true),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: saving
-                        ? null
-                        : () async {
-                            final name = nameCtrl.text.trim();
-                            if (name.isEmpty) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                const SnackBar(content: Text('Name cannot be empty'), backgroundColor: Colors.red),
-                              );
-                              return;
-                            }
-                            setSheetState(() => saving = true);
-                            try {
-                              final updates = <String, dynamic>{
-                                'name': name,
-                              };
-                              if (user.isProvider) {
-                                updates['serviceDescription'] = descCtrl.text.trim();
-                                updates['serviceArea'] = areaCtrl.text.trim();
-                                if (rateCtrl.text.isNotEmpty) {
-                                  updates['hourlyRate'] = double.tryParse(rateCtrl.text) ?? 0;
-                                }
-                              }
-                              await AuthService().updateUserProfile(user.uid, updates);
-                              await appProvider.loadCurrentUser();
-                              if (ctx.mounted) {
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('Profile updated successfully!'),
-                                    backgroundColor: AppColors.green,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              setSheetState(() => saving = false);
-                              if (ctx.mounted) {
-                                ScaffoldMessenger.of(ctx).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Failed to save: $e'),
-                                    backgroundColor: Colors.red,
-                                    behavior: SnackBarBehavior.floating,
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: saving
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Save Changes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _EditProfilePage(user: user, appProvider: appProvider),
       ),
     );
   }
@@ -849,6 +728,338 @@ class _AadhaarUploadSheetState extends State<_AadhaarUploadSheet> {
             ),
           ),
           const SizedBox(height: 12),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditProfilePage extends StatefulWidget {
+  final UserModel user;
+  final AppProvider appProvider;
+  const _EditProfilePage({required this.user, required this.appProvider});
+
+  @override
+  State<_EditProfilePage> createState() => _EditProfilePageState();
+}
+
+class _EditProfilePageState extends State<_EditProfilePage> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _emailCtrl;
+  late final TextEditingController _cityCtrl;
+  late final TextEditingController _stateCtrl;
+  late final TextEditingController _descCtrl;
+  late final TextEditingController _rateCtrl;
+  late final TextEditingController _areaCtrl;
+  bool _saving = false;
+  bool _uploadingPhoto = false;
+  XFile? _pickedImage;
+
+  @override
+  void initState() {
+    super.initState();
+    final u = widget.user;
+    _nameCtrl = TextEditingController(text: u.name);
+    _emailCtrl = TextEditingController(text: u.email ?? '');
+    _cityCtrl = TextEditingController(text: u.city ?? '');
+    _stateCtrl = TextEditingController(text: u.state ?? '');
+    _descCtrl = TextEditingController(text: u.serviceDescription ?? '');
+    _rateCtrl = TextEditingController(
+        text: u.hourlyRate != null ? u.hourlyRate!.toInt().toString() : '');
+    _areaCtrl = TextEditingController(text: u.serviceArea ?? '');
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _cityCtrl.dispose();
+    _stateCtrl.dispose();
+    _descCtrl.dispose();
+    _rateCtrl.dispose();
+    _areaCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickProfilePhoto() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
+    if (image == null) return;
+
+    setState(() {
+      _pickedImage = image;
+      _uploadingPhoto = true;
+    });
+
+    try {
+      final url = await StorageService().uploadProfilePhoto(widget.user.uid, image);
+      await AuthService().updateUserProfile(widget.user.uid, {'profilePhotoUrl': url});
+      await widget.appProvider.loadCurrentUser();
+      if (mounted) {
+        setState(() => _uploadingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Profile photo updated!'),
+            backgroundColor: AppColors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _uploadingPhoto = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Name cannot be empty'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+
+    try {
+      final updates = <String, dynamic>{
+        'name': name,
+        'email': _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+        'city': _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
+        'state': _stateCtrl.text.trim().isEmpty ? null : _stateCtrl.text.trim(),
+      };
+
+      if (widget.user.isProvider) {
+        updates['serviceDescription'] = _descCtrl.text.trim();
+        updates['serviceArea'] = _areaCtrl.text.trim();
+        if (_rateCtrl.text.isNotEmpty) {
+          updates['hourlyRate'] = double.tryParse(_rateCtrl.text) ?? 0;
+        }
+      }
+
+      await AuthService().updateUserProfile(widget.user.uid, updates);
+      await widget.appProvider.loadCurrentUser();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Profile updated successfully!'),
+            backgroundColor: AppColors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _saving = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: $e'), backgroundColor: Colors.red, behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final user = widget.user;
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        title: const Text('Edit Profile'),
+        backgroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          // Profile photo section
+          Center(
+            child: GestureDetector(
+              onTap: _uploadingPhoto ? null : _pickProfilePhoto,
+              child: Stack(
+                children: [
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppColors.tealLight,
+                      border: Border.all(color: AppColors.teal, width: 3),
+                      image: _pickedImage != null && !kIsWeb
+                          ? DecorationImage(image: FileImage(File(_pickedImage!.path)), fit: BoxFit.cover)
+                          : user.profilePhotoUrl != null
+                              ? DecorationImage(image: NetworkImage(user.profilePhotoUrl!), fit: BoxFit.cover)
+                              : null,
+                    ),
+                    child: _uploadingPhoto
+                        ? const Center(child: CircularProgressIndicator(color: AppColors.teal, strokeWidth: 2))
+                        : (user.profilePhotoUrl == null && _pickedImage == null)
+                            ? Icon(Icons.person, size: 48, color: AppColors.teal.withOpacity(0.5))
+                            : null,
+                  ),
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.teal,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: const Icon(Icons.camera_alt, size: 16, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Center(
+            child: Text(
+              'Tap to change photo',
+              style: TextStyle(fontSize: 12, color: AppColors.tealDark, fontWeight: FontWeight.w500),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Basic info section
+          _sectionLabel('Basic Information'),
+          const SizedBox(height: 10),
+          _fieldCard([
+            _formField('Full Name', _nameCtrl, Icons.person, TextInputType.name, TextCapitalization.words),
+            _formField('Email (optional)', _emailCtrl, Icons.email, TextInputType.emailAddress, TextCapitalization.none),
+            _formField('City', _cityCtrl, Icons.location_city, TextInputType.text, TextCapitalization.words),
+            _formField('State', _stateCtrl, Icons.map, TextInputType.text, TextCapitalization.words),
+          ]),
+
+          // Provider-specific fields
+          if (user.isProvider) ...[
+            const SizedBox(height: 20),
+            _sectionLabel('Service Information'),
+            const SizedBox(height: 10),
+            _fieldCard([
+              _formField('Service Description', _descCtrl, Icons.description, TextInputType.text, TextCapitalization.sentences, maxLines: 3, maxLength: 200),
+              _formField('Service Area', _areaCtrl, Icons.place, TextInputType.text, TextCapitalization.words),
+              _formField('Rate per Visit (\u20B9)', _rateCtrl, Icons.currency_rupee, TextInputType.number, TextCapitalization.none),
+            ]),
+          ],
+
+          // Read-only info
+          const SizedBox(height: 20),
+          _sectionLabel('Account Details'),
+          const SizedBox(height: 10),
+          _infoCard([
+            _readOnlyRow(Icons.phone, 'Phone', user.phone),
+            _readOnlyRow(Icons.shield, 'Local Sathi ID', user.localSathiId),
+            _readOnlyRow(Icons.person_outline, 'Role', user.role.name[0].toUpperCase() + user.role.name.substring(1)),
+            _readOnlyRow(Icons.verified_user, 'Verification', user.isVerified ? 'Verified' : user.verificationStatus.name),
+            if (user.isProvider)
+              _readOnlyRow(Icons.star, 'Rating', '${user.rating.toStringAsFixed(1)} (${user.reviewCount} reviews)'),
+          ]),
+
+          const SizedBox(height: 28),
+
+          // Save button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _saving ? null : _saveProfile,
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              child: _saving
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(text, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text));
+  }
+
+  Widget _fieldCard(List<Widget> children) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12)],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _formField(String label, TextEditingController ctrl, IconData icon, TextInputType keyType, TextCapitalization cap, {int maxLines = 1, int? maxLength}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextField(
+        controller: ctrl,
+        keyboardType: keyType,
+        textCapitalization: cap,
+        maxLines: maxLines,
+        maxLength: maxLength,
+        inputFormatters: keyType == TextInputType.number ? [FilteringTextInputFormatter.digitsOnly] : null,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          prefixIcon: Icon(icon, size: 20, color: AppColors.teal),
+          filled: true,
+          fillColor: AppColors.bg,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          isDense: true,
+        ),
+        style: const TextStyle(fontSize: 14),
+      ),
+    );
+  }
+
+  Widget _infoCard(List<Widget> children) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 12)],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _readOnlyRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.textMuted),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 100,
+            child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+          ),
         ],
       ),
     );
