@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum UserRole { customer, provider, admin }
+enum UserRole { customer, provider, moderator, admin }
 
 enum VerificationStatus { pending, verified, rejected }
 
@@ -57,6 +57,8 @@ class UserModel {
 
   bool get isProvider => role == UserRole.provider;
   bool get isAdmin => role == UserRole.admin;
+  bool get isModerator => role == UserRole.moderator;
+  bool get hasAdminAccess => role == UserRole.admin || role == UserRole.moderator;
   bool get isVerified => verificationStatus == VerificationStatus.verified;
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {

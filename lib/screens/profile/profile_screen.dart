@@ -10,7 +10,7 @@ import '../../services/auth_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/update_service.dart';
 import '../../widgets/update_dialog.dart';
-import '../admin/admin_screen.dart';
+import '../admin/admin_panel.dart';
 import '../auth/login_screen.dart';
 import '../wallet/wallet_screen.dart';
 
@@ -285,13 +285,13 @@ class ProfileScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
 
-                  // Admin link (shown for admin users)
-                  if (user.isAdmin)
+                  // Admin link (shown for admin & moderator users)
+                  if (user.hasAdminAccess)
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const AdminScreen()),
+                          MaterialPageRoute(builder: (_) => AdminPanel(currentUser: user)),
                         );
                       },
                       child: Container(
@@ -481,7 +481,7 @@ class ProfileScreen extends StatelessWidget {
               leading: const Icon(Icons.system_update, color: AppColors.teal),
               title: const Text('Check for Updates'),
               subtitle: Text(
-                'v1.8.4',
+                'v1.9.0',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
               onTap: () {

@@ -461,6 +461,8 @@ class FirestoreService {
         u['verificationStatus'] == 'pending' && u['aadhaarDocUrl'] != null).length;
     final activeProviders = allUsers.where((u) =>
         u['role'] == 'provider' && u['verificationStatus'] == 'verified').length;
+    final totalAdmins = allUsers.where((u) =>
+        u['role'] == 'admin' || u['role'] == 'moderator').length;
 
     // Posts today
     final today = DateTime.now();
@@ -470,11 +472,91 @@ class FirestoreService {
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
         .get();
 
+    // Reviews total
+    final reviewsSnap = await _firestore.collection('reviews').get();
+
     return {
       'totalUsers': totalUsers,
       'pendingVerifications': pendingVerifications,
       'activeProviders': activeProviders,
       'postsToday': postsSnap.docs.length,
+      'totalAdmins': totalAdmins,
+      'totalReviews': reviewsSnap.docs.length,
     };
+  }
+
+  // ══════════════════ ADMIN PANEL ══════════════════
+
+  // Get all users with optional filtering
+  Stream<List<UserModel>> getAllUsers() {
+    return _firestore
+        .collection('users')
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => UserModel.fromFirestore(d)).toList());
+  }
+
+  // Update user role
+  Future<void> updateUserRole(String uid, UserRole role) async {
+    await _firestore.collection('users').doc(uid).update({
+      'role': role.name,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  // Get team members (admins + moderators)
+  Stream<List<UserModel>> getTeamMembers() {
+    return _firestore
+        .collection('users')
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => UserModel.fromFirestore(d))
+            .where((u) => u.role == UserRole.admin || u.role == UserRole.moderator)
+            .toList());
+  }
+
+  // Delete user account
+  Future<void> deleteUser(String uid) async {
+    // Delete user's posts
+    final postsSnap = await _firestore
+        .collection('posts')
+        .where('authorUid', isEqualTo: uid)
+        .get();
+    for (final doc in postsSnap.docs) {
+      await doc.reference.delete();
+    }
+    // Delete user's reviews
+    final reviewsSnap = await _firestore
+        .collection('reviews')
+        .where('reviewerUid', isEqualTo: uid)
+        .get();
+    for (final doc in reviewsSnap.docs) {
+      await doc.reference.delete();
+    }
+    // Delete wallet
+    await _firestore.collection('wallets').doc(uid).delete();
+    // Delete user document
+    await _firestore.collection('users').doc(uid).delete();
+  }
+
+  // Get all reviews
+  Stream<List<ReviewModel>> getAllReviews() {
+    return _firestore
+        .collection('reviews')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => ReviewModel.fromFirestore(d)).toList());
+  }
+
+  // Delete review
+  Future<void> deleteReview(String reviewId) async {
+    await _firestore.collection('reviews').doc(reviewId).delete();
+  }
+
+  // Toggle user sponsored status
+  Future<void> toggleSponsored(String uid, bool sponsored) async {
+    await _firestore.collection('users').doc(uid).update({
+      'isSponsored': sponsored,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
   }
 }
