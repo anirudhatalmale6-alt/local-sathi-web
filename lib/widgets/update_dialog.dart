@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
@@ -232,13 +233,29 @@ class _UpdateDialogState extends State<UpdateDialog> {
     });
 
     try {
-      // Get temp directory
-      final dir = await getTemporaryDirectory();
+      // Use external storage for better APK installer access
+      Directory? dir;
+      if (Platform.isAndroid) {
+        dir = await getExternalStorageDirectory();
+      }
+      dir ??= await getTemporaryDirectory();
+
       final v = version ?? widget.versionInfo.currentVersion;
       final filePath = '${dir.path}/local_sathi_$v.apk';
 
-      // Download with progress
-      final dio = Dio();
+      // Delete old file if exists
+      final oldFile = File(filePath);
+      if (await oldFile.exists()) {
+        await oldFile.delete();
+      }
+
+      // Download with progress - follow redirects (GitHub releases redirect)
+      final dio = Dio(BaseOptions(
+        followRedirects: true,
+        maxRedirects: 5,
+        receiveTimeout: const Duration(minutes: 5),
+      ));
+
       await dio.download(
         downloadUrl,
         filePath,
@@ -259,41 +276,120 @@ class _UpdateDialogState extends State<UpdateDialog> {
         },
       );
 
+      // Verify file was downloaded
+      final downloadedFile = File(filePath);
+      if (!await downloadedFile.exists() || await downloadedFile.length() < 1000) {
+        throw Exception('Download incomplete');
+      }
+
       setState(() {
-        _statusText = 'Opening installer...';
+        _statusText = 'Installing update...';
         _progress = 1.0;
       });
 
-      // Open APK for installation
-      final result = await OpenFilex.open(filePath);
-      if (result.type != ResultType.done && mounted) {
-        // Fallback: open URL in browser
-        _launchUrl(downloadUrl);
-      }
+      // Open APK with explicit MIME type for reliable installation
+      final result = await OpenFilex.open(
+        filePath,
+        type: 'application/vnd.android.package-archive',
+      );
 
-      if (mounted) {
-        Navigator.pop(context);
+      debugPrint('OpenFilex result: ${result.type} - ${result.message}');
+
+      if (result.type == ResultType.done) {
+        if (mounted) Navigator.pop(context);
+      } else {
+        // Show install instruction instead of silently opening browser
+        if (mounted) {
+          setState(() {
+            _downloading = false;
+            _progress = 1.0;
+            _statusText = 'Download complete! If installer did not open, tap below.';
+          });
+          _showInstallHelp(filePath, downloadUrl);
+        }
       }
     } catch (e) {
+      debugPrint('Update download error: $e');
       if (mounted) {
         setState(() {
           _downloading = false;
           _progress = 0;
+          _statusText = '';
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Download failed. Opening in browser...'),
-            backgroundColor: AppColors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-        );
-        // Fallback to browser
-        _launchUrl(downloadUrl);
+        _showDownloadError(downloadUrl);
       }
     }
+  }
+
+  void _showInstallHelp(String filePath, String downloadUrl) {
+    if (!mounted) return;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.info_outline, size: 40, color: AppColors.teal),
+            const SizedBox(height: 12),
+            const Text(
+              'APK Downloaded Successfully!',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'If the installer did not open automatically, you may need to enable "Install from unknown sources" in your phone settings for this app.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: AppColors.textSecondary, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  OpenFilex.open(filePath, type: 'application/vnd.android.package-archive');
+                },
+                icon: const Icon(Icons.install_mobile, size: 20),
+                label: const Text('Try Install Again'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _launchUrl(downloadUrl);
+              },
+              child: const Text('Open in Browser Instead', style: TextStyle(color: AppColors.textMuted)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDownloadError(String downloadUrl) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Download failed. Please check your internet connection.'),
+        backgroundColor: AppColors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        action: SnackBarAction(
+          label: 'Open in Browser',
+          textColor: Colors.white,
+          onPressed: () => _launchUrl(downloadUrl),
+        ),
+      ),
+    );
   }
 
   Future<void> _launchUrl(String url) async {

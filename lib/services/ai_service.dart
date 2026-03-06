@@ -1,20 +1,25 @@
+import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../config/constants.dart';
 
 class AiService {
   static GenerativeModel? _model;
+  static String? _cachedKey;
 
-  static Future<GenerativeModel> _getModel(String apiKey) async {
-    _model ??= GenerativeModel(
-      model: 'gemini-2.0-flash',
-      apiKey: apiKey,
-    );
+  static GenerativeModel _getModel(String apiKey) {
+    if (_model == null || _cachedKey != apiKey) {
+      _cachedKey = apiKey;
+      _model = GenerativeModel(
+        model: 'gemini-1.5-flash',
+        apiKey: apiKey,
+      );
+    }
     return _model!;
   }
 
   /// Analyze user's problem and suggest service categories
   static Future<AiSuggestion> analyzeServiceNeed(String userMessage, String apiKey) async {
-    final model = await _getModel(apiKey);
+    final model = _getModel(apiKey);
 
     final categories = AppConstants.allCategories.join(', ');
 
@@ -55,8 +60,9 @@ Respond as Sathi AI:''';
         suggestedCategory: suggestedCategory,
       );
     } catch (e) {
+      debugPrint('Gemini AI error: $e');
       return AiSuggestion(
-        message: 'Oops! Network issue. Please check your internet and try again.',
+        message: 'AI service temporarily unavailable. Error: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}',
         suggestedCategory: null,
       );
     }
@@ -70,7 +76,7 @@ Respond as Sathi AI:''';
     int reviewCount,
     String apiKey,
   ) async {
-    final model = await _getModel(apiKey);
+    final model = _getModel(apiKey);
 
     final prompt = '''Generate a 1-line recommendation for a service provider on Local Sathi app.
 Provider: $providerName

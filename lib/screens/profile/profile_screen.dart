@@ -481,7 +481,7 @@ class ProfileScreen extends StatelessWidget {
               leading: const Icon(Icons.system_update, color: AppColors.teal),
               title: const Text('Check for Updates'),
               subtitle: Text(
-                'v1.8.2',
+                'v1.8.3',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
               onTap: () {
