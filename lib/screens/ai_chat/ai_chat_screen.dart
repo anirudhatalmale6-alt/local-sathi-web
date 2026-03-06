@@ -36,16 +36,22 @@ class _AiChatScreenState extends State<AiChatScreen> {
     );
   }
 
+  static const _fallbackKey = 'AIzaSyC-tLH3MDB4yPnerNxS9dwbDco8q1nJu0I';
+
   Future<void> _loadApiKey() async {
     try {
       final doc = await FirebaseFirestore.instance
           .collection('app_config')
           .doc('ai')
           .get();
-      if (doc.exists) {
-        _geminiApiKey = doc.data()?['geminiApiKey'];
+      if (doc.exists && doc.data()?['geminiApiKey'] != null) {
+        _geminiApiKey = doc.data()!['geminiApiKey'];
+      } else {
+        _geminiApiKey = _fallbackKey;
       }
-    } catch (_) {}
+    } catch (_) {
+      _geminiApiKey = _fallbackKey;
+    }
   }
 
   @override
