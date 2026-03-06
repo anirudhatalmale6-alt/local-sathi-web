@@ -54,10 +54,10 @@ class _AdminScreenState extends State<AdminScreen> {
       if (config == null) {
         // Seed initial version config
         await updateService.updateVersionConfig(AppVersionInfo(
-          currentVersion: '1.3.1',
+          currentVersion: '1.8.3',
           minVersion: '1.0.0',
-          updateUrl: 'https://github.com/anirudhatalmale6-alt/local-sathi-app/releases',
-          releaseNotes: 'Welcome to Local Sathi!',
+          updateUrl: 'https://github.com/anirudhatalmale6-alt/local-sathi-web/releases/download/v1.8.3/local-sathi-v1.8.3.apk',
+          releaseNotes: 'Fixed Sathi AI and in-app download!',
         ));
       }
     } catch (_) {}
