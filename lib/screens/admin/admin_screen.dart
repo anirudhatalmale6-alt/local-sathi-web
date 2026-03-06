@@ -626,62 +626,233 @@ class _AdminScreenState extends State<AdminScreen> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          AvatarWidget(name: user.name, size: 44),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user.name,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.text,
-                  ),
-                ),
-                Text(
-                  'Aadhaar: ${user.aadhaarNumber ?? 'Document uploaded'}',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
           Row(
             children: [
-              _circleButton(
-                Icons.check,
-                AppColors.greenLight,
-                AppColors.green,
-                () async {
-                  await _firestoreService.updateVerificationStatus(
-                    user.uid,
-                    VerificationStatus.verified,
-                  );
-                  _loadStats();
-                },
+              AvatarWidget(name: user.name, size: 44),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    if (user.phone.isNotEmpty)
+                      Text(
+                        user.phone,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    Text(
+                      'Aadhaar: ${user.aadhaarNumber ?? 'Document uploaded'}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(width: 8),
-              _circleButton(
-                Icons.close,
-                AppColors.redLight,
-                AppColors.red,
-                () async {
-                  await _firestoreService.updateVerificationStatus(
-                    user.uid,
-                    VerificationStatus.rejected,
-                  );
-                  _loadStats();
-                },
+              Row(
+                children: [
+                  _circleButton(
+                    Icons.check,
+                    AppColors.greenLight,
+                    AppColors.green,
+                    () async {
+                      await _firestoreService.updateVerificationStatus(
+                        user.uid,
+                        VerificationStatus.verified,
+                      );
+                      _loadStats();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _circleButton(
+                    Icons.close,
+                    AppColors.redLight,
+                    AppColors.red,
+                    () async {
+                      await _firestoreService.updateVerificationStatus(
+                        user.uid,
+                        VerificationStatus.rejected,
+                      );
+                      _loadStats();
+                    },
+                  ),
+                ],
               ),
             ],
           ),
+          // View Aadhaar Document Button
+          if (user.aadhaarDocUrl != null && user.aadhaarDocUrl!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _viewAadhaarDoc(user),
+                icon: const Icon(Icons.visibility, size: 16),
+                label: const Text('View Aadhaar Document', style: TextStyle(fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.tealDark,
+                  side: const BorderSide(color: AppColors.teal, width: 1),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  void _viewAadhaarDoc(UserModel user) {
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: AppColors.teal,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'Aadhaar: ${user.aadhaarNumber ?? 'N/A'}',
+                          style: const TextStyle(fontSize: 12, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+            // Document Image
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.55,
+              ),
+              child: InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.network(
+                  user.aadhaarDocUrl!,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return SizedBox(
+                      height: 200,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                          color: AppColors.teal,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) => const SizedBox(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.broken_image, size: 48, color: AppColors.textMuted),
+                          SizedBox(height: 8),
+                          Text('Could not load document', style: TextStyle(color: AppColors.textMuted)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Action buttons
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _firestoreService.updateVerificationStatus(
+                          user.uid,
+                          VerificationStatus.verified,
+                        );
+                        _loadStats();
+                      },
+                      icon: const Icon(Icons.check_circle, size: 18),
+                      label: const Text('Approve'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _firestoreService.updateVerificationStatus(
+                          user.uid,
+                          VerificationStatus.rejected,
+                        );
+                        _loadStats();
+                      },
+                      icon: const Icon(Icons.cancel, size: 18),
+                      label: const Text('Reject'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
