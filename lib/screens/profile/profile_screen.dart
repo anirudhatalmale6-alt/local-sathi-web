@@ -12,6 +12,7 @@ import '../../services/update_service.dart';
 import '../../widgets/update_dialog.dart';
 import '../admin/admin_screen.dart';
 import '../auth/login_screen.dart';
+import '../wallet/wallet_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -462,10 +463,25 @@ class ProfileScreen extends StatelessWidget {
                 },
               ),
             ListTile(
+              leading: Icon(Icons.stars_rounded, color: AppColors.orange),
+              title: const Text('Sathi Wallet'),
+              subtitle: Text(
+                'View your reward points',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const WalletScreen()),
+                );
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.system_update, color: AppColors.teal),
               title: const Text('Check for Updates'),
               subtitle: Text(
-                'v1.6.4',
+                'v1.7.0',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
               onTap: () {

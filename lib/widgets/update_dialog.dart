@@ -1,9 +1,13 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
 import '../config/theme.dart';
 import '../services/update_service.dart';
 
-class UpdateDialog extends StatelessWidget {
+class UpdateDialog extends StatefulWidget {
   final UpdateType updateType;
   final AppVersionInfo versionInfo;
 
@@ -14,11 +18,20 @@ class UpdateDialog extends StatelessWidget {
   });
 
   @override
+  State<UpdateDialog> createState() => _UpdateDialogState();
+}
+
+class _UpdateDialogState extends State<UpdateDialog> {
+  bool _downloading = false;
+  double _progress = 0.0;
+  String _statusText = '';
+
+  @override
   Widget build(BuildContext context) {
-    final isForced = updateType == UpdateType.forced;
+    final isForced = widget.updateType == UpdateType.forced;
 
     return PopScope(
-      canPop: !isForced,
+      canPop: !isForced && !_downloading,
       child: Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: Padding(
@@ -34,17 +47,45 @@ class UpdateDialog extends StatelessWidget {
                   shape: BoxShape.circle,
                   color: isForced ? AppColors.redLight : AppColors.tealLight,
                 ),
-                child: Icon(
-                  isForced ? Icons.system_update : Icons.update,
-                  size: 32,
-                  color: isForced ? AppColors.red : AppColors.tealDark,
-                ),
+                child: _downloading
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          SizedBox(
+                            width: 44,
+                            height: 44,
+                            child: CircularProgressIndicator(
+                              value: _progress > 0 ? _progress : null,
+                              strokeWidth: 3,
+                              color: AppColors.teal,
+                              backgroundColor: AppColors.bg,
+                            ),
+                          ),
+                          Text(
+                            '${(_progress * 100).toInt()}%',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.tealDark,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Icon(
+                        isForced ? Icons.system_update : Icons.update,
+                        size: 32,
+                        color: isForced ? AppColors.red : AppColors.tealDark,
+                      ),
               ),
               const SizedBox(height: 16),
 
               // Title
               Text(
-                isForced ? 'Update Required' : 'Update Available',
+                _downloading
+                    ? 'Downloading Update...'
+                    : isForced
+                        ? 'Update Required'
+                        : 'Update Available',
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -62,7 +103,7 @@ class UpdateDialog extends StatelessWidget {
                   borderRadius: BorderRadius.circular(100),
                 ),
                 child: Text(
-                  'v${versionInfo.currentVersion}',
+                  'v${widget.versionInfo.currentVersion}',
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -72,9 +113,11 @@ class UpdateDialog extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // Release notes
+              // Status or release notes
               Text(
-                versionInfo.releaseNotes,
+                _downloading
+                    ? _statusText
+                    : widget.versionInfo.releaseNotes,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 14,
@@ -82,35 +125,57 @@ class UpdateDialog extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
+
+              // Download progress bar
+              if (_downloading) ...[
+                const SizedBox(height: 16),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: _progress > 0 ? _progress : null,
+                    minHeight: 6,
+                    backgroundColor: AppColors.bg,
+                    color: AppColors.teal,
+                  ),
+                ),
+              ],
+
               const SizedBox(height: 20),
 
               // Update button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => _launchUrl(versionInfo.updateUrl),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+              if (!_downloading)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _downloadAndInstall(),
+                    icon: const Icon(Icons.download_rounded, size: 20),
+                    label: const Text(
+                      'Download & Install',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Update Now',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                  ),
                 ),
-              ),
 
               // Beta button
-              if (versionInfo.betaEnabled &&
-                  versionInfo.betaVersion != null &&
-                  versionInfo.betaUrl != null) ...[
+              if (!_downloading &&
+                  widget.versionInfo.betaEnabled &&
+                  widget.versionInfo.betaVersion != null &&
+                  widget.versionInfo.betaUrl != null) ...[
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: () => _launchUrl(versionInfo.betaUrl!),
+                    onPressed: () => _downloadAndInstall(
+                      url: widget.versionInfo.betaUrl!,
+                      version: widget.versionInfo.betaVersion!,
+                    ),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       side: const BorderSide(color: AppColors.orange),
@@ -119,7 +184,7 @@ class UpdateDialog extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'Try Beta v${versionInfo.betaVersion}',
+                      'Try Beta v${widget.versionInfo.betaVersion}',
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -130,8 +195,8 @@ class UpdateDialog extends StatelessWidget {
                 ),
               ],
 
-              // Skip button (only for optional updates)
-              if (!isForced) ...[
+              // Skip button (only for optional updates, not during download)
+              if (!isForced && !_downloading) ...[
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
@@ -149,6 +214,86 @@ class UpdateDialog extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _downloadAndInstall({String? url, String? version}) async {
+    final downloadUrl = url ?? widget.versionInfo.updateUrl;
+
+    // On web, just launch URL
+    if (kIsWeb) {
+      _launchUrl(downloadUrl);
+      return;
+    }
+
+    setState(() {
+      _downloading = true;
+      _progress = 0;
+      _statusText = 'Starting download...';
+    });
+
+    try {
+      // Get temp directory
+      final dir = await getTemporaryDirectory();
+      final v = version ?? widget.versionInfo.currentVersion;
+      final filePath = '${dir.path}/local_sathi_$v.apk';
+
+      // Download with progress
+      final dio = Dio();
+      await dio.download(
+        downloadUrl,
+        filePath,
+        onReceiveProgress: (received, total) {
+          if (total != -1) {
+            setState(() {
+              _progress = received / total;
+              final mb = (received / 1024 / 1024).toStringAsFixed(1);
+              final totalMb = (total / 1024 / 1024).toStringAsFixed(1);
+              _statusText = 'Downloading $mb / $totalMb MB';
+            });
+          } else {
+            setState(() {
+              final mb = (received / 1024 / 1024).toStringAsFixed(1);
+              _statusText = 'Downloaded $mb MB...';
+            });
+          }
+        },
+      );
+
+      setState(() {
+        _statusText = 'Opening installer...';
+        _progress = 1.0;
+      });
+
+      // Open APK for installation
+      final result = await OpenFilex.open(filePath);
+      if (result.type != ResultType.done && mounted) {
+        // Fallback: open URL in browser
+        _launchUrl(downloadUrl);
+      }
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+          _progress = 0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Download failed. Opening in browser...'),
+            backgroundColor: AppColors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+        // Fallback to browser
+        _launchUrl(downloadUrl);
+      }
+    }
   }
 
   Future<void> _launchUrl(String url) async {

@@ -4,6 +4,7 @@ import '../models/post_model.dart';
 import '../models/comment_model.dart';
 import '../models/review_model.dart';
 import '../models/feedback_model.dart';
+import '../models/wallet_model.dart';
 import '../config/constants.dart';
 
 class FirestoreService {
@@ -100,6 +101,15 @@ class FirestoreService {
   // Create a post
   Future<void> createPost(PostModel post) async {
     await _firestore.collection('posts').add(post.toFirestore());
+    // Award points for first post
+    try {
+      await awardPointsOnce(
+        post.authorUid,
+        SathiPoints.firstPost,
+        'First post bonus',
+        'first_post',
+      );
+    } catch (_) {}
   }
 
   // Like/unlike a post
@@ -202,6 +212,11 @@ class FirestoreService {
       'rating': double.parse(avgRating.toStringAsFixed(1)),
       'reviewCount': reviews.docs.length,
     });
+
+    // Award points for leaving a review
+    try {
+      await awardPoints(review.reviewerUid, SathiPoints.review, 'Left a review');
+    } catch (_) {}
   }
 
   // ══════════════════ ADMIN ══════════════════
@@ -373,6 +388,62 @@ class FirestoreService {
     }
 
     return stateMap;
+  }
+
+  // ══════════════════ SATHI WALLET ══════════════════
+
+  // Award points to a user
+  Future<void> awardPoints(String uid, int points, String description, {WalletTransactionType type = WalletTransactionType.earned}) async {
+    final walletRef = _firestore.collection('wallets').doc(uid);
+    final txRef = walletRef.collection('transactions').doc();
+
+    final batch = _firestore.batch();
+
+    // Update balance (create or increment)
+    batch.set(walletRef, {
+      'balance': FieldValue.increment(points),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    }, SetOptions(merge: true));
+
+    // Add transaction record
+    batch.set(txRef, WalletTransaction(
+      id: txRef.id,
+      description: description,
+      points: points,
+      type: type,
+      createdAt: DateTime.now(),
+    ).toFirestore());
+
+    await batch.commit();
+  }
+
+  // Get wallet balance
+  Future<int> getWalletBalance(String uid) async {
+    final doc = await _firestore.collection('wallets').doc(uid).get();
+    if (!doc.exists) return 0;
+    return (doc.data()?['balance'] ?? 0) as int;
+  }
+
+  // Check if a reward has already been given (prevents duplicate awards)
+  Future<bool> hasRewardBeenGiven(String uid, String rewardKey) async {
+    final doc = await _firestore.collection('wallets').doc(uid).get();
+    if (!doc.exists) return false;
+    final rewards = List<String>.from(doc.data()?['rewardsGiven'] ?? []);
+    return rewards.contains(rewardKey);
+  }
+
+  // Mark a reward as given
+  Future<void> markRewardGiven(String uid, String rewardKey) async {
+    await _firestore.collection('wallets').doc(uid).set({
+      'rewardsGiven': FieldValue.arrayUnion([rewardKey]),
+    }, SetOptions(merge: true));
+  }
+
+  // Award points with duplicate check
+  Future<void> awardPointsOnce(String uid, int points, String description, String rewardKey) async {
+    if (await hasRewardBeenGiven(uid, rewardKey)) return;
+    await awardPoints(uid, points, description);
+    await markRewardGiven(uid, rewardKey);
   }
 
   // Get app stats (client-side counting to avoid composite index requirements)

@@ -1,7 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
+import '../models/wallet_model.dart';
 import '../config/constants.dart';
+import 'firestore_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -89,6 +91,16 @@ class AuthService {
     if (autoRole == UserRole.admin) {
       await _seedAppConfig();
     }
+
+    // Award registration bonus points
+    try {
+      await FirestoreService().awardPointsOnce(
+        uid,
+        SathiPoints.registration,
+        'Welcome bonus - Registration',
+        'registration',
+      );
+    } catch (_) {}
 
     return user;
   }
