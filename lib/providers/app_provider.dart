@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
 import '../services/location_service.dart';
 
 class AppProvider extends ChangeNotifier {
@@ -45,6 +46,11 @@ class AppProvider extends ChangeNotifier {
         notifyListeners();
 
         _currentUser = await _authService.getUserProfile(user.uid);
+
+        // Set online status
+        try {
+          await FirestoreService().setOnlineStatus(user.uid, true);
+        } catch (_) {}
 
         // Auto-upgrade first user (LS-100001) to admin if not already
         if (_currentUser != null &&
@@ -93,6 +99,13 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    // Set offline before signing out
+    final uid = _authService.currentUser?.uid;
+    if (uid != null) {
+      try {
+        await FirestoreService().setOnlineStatus(uid, false);
+      } catch (_) {}
+    }
     await _authService.signOut();
     _currentUser = null;
     _currentTabIndex = 0;

@@ -9,6 +9,7 @@ import '../../models/review_model.dart';
 import '../../services/firestore_service.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/avatar_widget.dart';
+import '../chat/chat_screen.dart';
 
 class ProviderDetailScreen extends StatelessWidget {
   final UserModel provider;
@@ -260,25 +261,46 @@ class ProviderDetailScreen extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () => _launchCall(context),
-                    icon: const Icon(Icons.phone, size: 18),
-                    label: const Text('Call'),
+                    icon: const Icon(Icons.phone, size: 16),
+                    label: const Text('Call', style: TextStyle(fontSize: 13)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => ChatScreen(
+                          otherUid: provider.uid,
+                          otherName: provider.name,
+                          otherPhotoUrl: provider.profilePhotoUrl,
+                        ),
+                      ));
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                    label: const Text('Message', style: TextStyle(fontSize: 13)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.blue,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () => _launchWhatsApp(context),
-                    icon: const Icon(Icons.chat, size: 18),
-                    label: const Text('WhatsApp'),
+                    icon: const Icon(Icons.chat, size: 16),
+                    label: const Text('WhatsApp', style: TextStyle(fontSize: 13)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF25D366),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
                 ),

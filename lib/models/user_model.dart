@@ -26,6 +26,11 @@ class UserModel {
   final double rating;
   final int reviewCount;
   final bool isSponsored;
+  final int followersCount;
+  final int followingCount;
+  final String? bio;
+  final bool isOnline;
+  final DateTime? lastSeen;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -51,6 +56,11 @@ class UserModel {
     this.rating = 0.0,
     this.reviewCount = 0,
     this.isSponsored = false,
+    this.followersCount = 0,
+    this.followingCount = 0,
+    this.bio,
+    this.isOnline = false,
+    this.lastSeen,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -91,6 +101,11 @@ class UserModel {
       rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
       reviewCount: data['reviewCount'] ?? 0,
       isSponsored: data['isSponsored'] ?? false,
+      followersCount: data['followersCount'] ?? 0,
+      followingCount: data['followingCount'] ?? 0,
+      bio: data['bio'],
+      isOnline: data['isOnline'] ?? false,
+      lastSeen: (data['lastSeen'] as Timestamp?)?.toDate(),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -118,6 +133,11 @@ class UserModel {
       'rating': rating,
       'reviewCount': reviewCount,
       'isSponsored': isSponsored,
+      'followersCount': followersCount,
+      'followingCount': followingCount,
+      'bio': bio,
+      'isOnline': isOnline,
+      'lastSeen': lastSeen != null ? Timestamp.fromDate(lastSeen!) : null,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
     };
@@ -143,6 +163,11 @@ class UserModel {
     double? rating,
     int? reviewCount,
     bool? isSponsored,
+    int? followersCount,
+    int? followingCount,
+    String? bio,
+    bool? isOnline,
+    DateTime? lastSeen,
   }) {
     return UserModel(
       uid: uid,
@@ -166,6 +191,11 @@ class UserModel {
       rating: rating ?? this.rating,
       reviewCount: reviewCount ?? this.reviewCount,
       isSponsored: isSponsored ?? this.isSponsored,
+      followersCount: followersCount ?? this.followersCount,
+      followingCount: followingCount ?? this.followingCount,
+      bio: bio ?? this.bio,
+      isOnline: isOnline ?? this.isOnline,
+      lastSeen: lastSeen ?? this.lastSeen,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
     );

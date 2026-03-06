@@ -14,6 +14,7 @@ import '../../widgets/update_dialog.dart';
 import '../admin/admin_panel.dart';
 import '../auth/login_screen.dart';
 import '../wallet/wallet_screen.dart';
+import '../social/follow_list_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -92,10 +93,10 @@ class ProfileScreen extends StatelessWidget {
                         ),
                       ),
 
-                      // Avatar with profile photo
+                      // Avatar with profile photo (prominent)
                       Container(
-                        width: 90,
-                        height: 90,
+                        width: 110,
+                        height: 110,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: user.profilePhotoUrl == null
@@ -117,7 +118,7 @@ class ProfileScreen extends StatelessWidget {
                                 child: Text(
                                   user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
                                   style: const TextStyle(
-                                    fontSize: 36,
+                                    fontSize: 44,
                                     fontWeight: FontWeight.w800,
                                     color: Colors.white,
                                   ),
@@ -213,27 +214,31 @@ class ProfileScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
+                    _statTappable(
+                      '${user.followersCount}', 'Followers', AppColors.teal,
+                      () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => FollowListScreen(uid: user.uid, name: user.name, initialTab: 0),
+                      )),
+                    ),
+                    Container(width: 1, height: 30, color: AppColors.bg),
+                    _statTappable(
+                      '${user.followingCount}', 'Following', AppColors.blue,
+                      () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => FollowListScreen(uid: user.uid, name: user.name, initialTab: 1),
+                      )),
+                    ),
+                    Container(width: 1, height: 30, color: AppColors.bg),
                     _statItemRich(
                       '${user.rating.toStringAsFixed(1)} \u2605',
                       'Rating',
                       user.rating >= 4 ? AppColors.green : (user.rating >= 3 ? AppColors.gold : AppColors.orange),
                     ),
                     Container(width: 1, height: 30, color: AppColors.bg),
-                    _statItemRich('${user.reviewCount}', 'Reviews', AppColors.blue),
-                    Container(width: 1, height: 30, color: AppColors.bg),
                     _statItemRich(
                       "${_monthName(user.createdAt.month)} '${user.createdAt.year.toString().substring(2)}",
                       'Joined',
                       AppColors.teal,
                     ),
-                    if (user.isProvider) ...[
-                      Container(width: 1, height: 30, color: AppColors.bg),
-                      _statItemRich(
-                        user.isVerified ? '\u2713' : '-',
-                        'Verified',
-                        user.isVerified ? AppColors.green : AppColors.textMuted,
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -368,6 +373,21 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  Widget _statTappable(String value, String label, Color accentColor, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          children: [
+            Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: accentColor), textAlign: TextAlign.center),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textMuted), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _sectionCard(String title, Widget child) {
     return Container(
       width: double.infinity,
@@ -490,7 +510,7 @@ class ProfileScreen extends StatelessWidget {
               leading: const Icon(Icons.system_update, color: AppColors.teal),
               title: const Text('Check for Updates'),
               subtitle: Text(
-                'v1.9.1',
+                'v2.0.0',
                 style: TextStyle(fontSize: 12, color: AppColors.textMuted),
               ),
               onTap: () {
@@ -746,6 +766,7 @@ class _EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<_EditProfilePage> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _emailCtrl;
+  late final TextEditingController _bioCtrl;
   late final TextEditingController _cityCtrl;
   late final TextEditingController _stateCtrl;
   late final TextEditingController _descCtrl;
@@ -761,6 +782,7 @@ class _EditProfilePageState extends State<_EditProfilePage> {
     final u = widget.user;
     _nameCtrl = TextEditingController(text: u.name);
     _emailCtrl = TextEditingController(text: u.email ?? '');
+    _bioCtrl = TextEditingController(text: u.bio ?? '');
     _cityCtrl = TextEditingController(text: u.city ?? '');
     _stateCtrl = TextEditingController(text: u.state ?? '');
     _descCtrl = TextEditingController(text: u.serviceDescription ?? '');
@@ -773,6 +795,7 @@ class _EditProfilePageState extends State<_EditProfilePage> {
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
+    _bioCtrl.dispose();
     _cityCtrl.dispose();
     _stateCtrl.dispose();
     _descCtrl.dispose();
@@ -783,7 +806,43 @@ class _EditProfilePageState extends State<_EditProfilePage> {
 
   Future<void> _pickProfilePhoto() async {
     final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
+    // Show choice: camera or gallery
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Choose Photo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: AppColors.tealLight, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.camera_alt, color: AppColors.teal),
+              ),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(color: AppColors.blueLight, borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.photo_library, color: AppColors.blue),
+              ),
+              title: const Text('Choose from Gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final image = await picker.pickImage(source: source, maxWidth: 800, imageQuality: 80);
     if (image == null) return;
 
     setState(() {
@@ -835,6 +894,7 @@ class _EditProfilePageState extends State<_EditProfilePage> {
       final updates = <String, dynamic>{
         'name': name,
         'email': _emailCtrl.text.trim().isEmpty ? null : _emailCtrl.text.trim(),
+        'bio': _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
         'city': _cityCtrl.text.trim().isEmpty ? null : _cityCtrl.text.trim(),
         'state': _stateCtrl.text.trim().isEmpty ? null : _stateCtrl.text.trim(),
       };
@@ -941,6 +1001,7 @@ class _EditProfilePageState extends State<_EditProfilePage> {
           const SizedBox(height: 10),
           _fieldCard([
             _formField('Full Name', _nameCtrl, Icons.person, TextInputType.name, TextCapitalization.words),
+            _formField('Bio (tell people about yourself)', _bioCtrl, Icons.info_outline, TextInputType.text, TextCapitalization.sentences, maxLines: 2, maxLength: 150),
             _formField('Email (optional)', _emailCtrl, Icons.email, TextInputType.emailAddress, TextCapitalization.none),
             _formField('City', _cityCtrl, Icons.location_city, TextInputType.text, TextCapitalization.words),
             _formField('State', _stateCtrl, Icons.map, TextInputType.text, TextCapitalization.words),

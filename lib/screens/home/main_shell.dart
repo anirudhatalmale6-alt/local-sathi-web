@@ -8,8 +8,8 @@ import '../../services/firestore_service.dart';
 import '../../services/update_service.dart';
 import '../../widgets/update_dialog.dart';
 import 'home_screen.dart';
-import '../search/search_screen.dart';
-import '../feed/feed_screen.dart';
+import '../social/discover_screen.dart';
+import '../chat/chat_list_screen.dart';
 import '../profile/profile_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -22,9 +22,9 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   final _screens = const [
     HomeScreen(),
-    SearchScreen(),
+    DiscoverScreen(),
     SizedBox(), // Placeholder for center FAB
-    FeedScreen(),
+    ChatListScreen(),
     ProfileScreen(),
   ];
 
@@ -114,9 +114,9 @@ class _MainShellState extends State<MainShell> {
                 child: Row(
                   children: [
                     _navItem(0, Icons.home_rounded, 'Home', idx == 0),
-                    _navItem(1, Icons.search_rounded, 'Search', idx == 1),
+                    _navItem(1, Icons.explore_rounded, 'Discover', idx == 1),
                     _centerButton(),
-                    _navItem(3, Icons.article_rounded, 'Feed', idx == 3),
+                    _navItem(3, Icons.chat_rounded, 'Chat', idx == 3),
                     _navItem(4, Icons.person_rounded, 'Profile', idx == 4),
                   ],
                 ),

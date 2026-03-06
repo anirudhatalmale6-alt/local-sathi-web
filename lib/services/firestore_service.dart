@@ -5,6 +5,9 @@ import '../models/comment_model.dart';
 import '../models/review_model.dart';
 import '../models/feedback_model.dart';
 import '../models/wallet_model.dart';
+import '../models/conversation_model.dart';
+import '../models/message_model.dart';
+import '../models/group_model.dart';
 import '../config/constants.dart';
 
 class FirestoreService {
@@ -558,5 +561,346 @@ class FirestoreService {
       'isSponsored': sponsored,
       'updatedAt': Timestamp.fromDate(DateTime.now()),
     });
+  }
+
+  // ══════════════════ FOLLOW SYSTEM ══════════════════
+
+  /// Follow a user
+  Future<void> followUser(String currentUid, String targetUid) async {
+    final batch = _firestore.batch();
+
+    // Add to current user's following
+    batch.set(
+      _firestore.collection('follows').doc(currentUid).collection('following').doc(targetUid),
+      {'followedAt': Timestamp.fromDate(DateTime.now())},
+    );
+
+    // Add to target user's followers
+    batch.set(
+      _firestore.collection('follows').doc(targetUid).collection('followers').doc(currentUid),
+      {'followedAt': Timestamp.fromDate(DateTime.now())},
+    );
+
+    // Increment counts
+    batch.update(_firestore.collection('users').doc(currentUid), {
+      'followingCount': FieldValue.increment(1),
+    });
+    batch.update(_firestore.collection('users').doc(targetUid), {
+      'followersCount': FieldValue.increment(1),
+    });
+
+    await batch.commit();
+  }
+
+  /// Unfollow a user
+  Future<void> unfollowUser(String currentUid, String targetUid) async {
+    final batch = _firestore.batch();
+
+    batch.delete(
+      _firestore.collection('follows').doc(currentUid).collection('following').doc(targetUid),
+    );
+    batch.delete(
+      _firestore.collection('follows').doc(targetUid).collection('followers').doc(currentUid),
+    );
+
+    batch.update(_firestore.collection('users').doc(currentUid), {
+      'followingCount': FieldValue.increment(-1),
+    });
+    batch.update(_firestore.collection('users').doc(targetUid), {
+      'followersCount': FieldValue.increment(-1),
+    });
+
+    await batch.commit();
+  }
+
+  /// Check if current user follows target
+  Future<bool> isFollowing(String currentUid, String targetUid) async {
+    final doc = await _firestore
+        .collection('follows')
+        .doc(currentUid)
+        .collection('following')
+        .doc(targetUid)
+        .get();
+    return doc.exists;
+  }
+
+  /// Get followers list (user models)
+  Stream<List<UserModel>> getFollowers(String uid) {
+    return _firestore
+        .collection('follows')
+        .doc(uid)
+        .collection('followers')
+        .snapshots()
+        .asyncMap((snap) async {
+      final users = <UserModel>[];
+      for (final doc in snap.docs) {
+        final userDoc = await _firestore.collection('users').doc(doc.id).get();
+        if (userDoc.exists) users.add(UserModel.fromFirestore(userDoc));
+      }
+      return users;
+    });
+  }
+
+  /// Get following list (user models)
+  Stream<List<UserModel>> getFollowing(String uid) {
+    return _firestore
+        .collection('follows')
+        .doc(uid)
+        .collection('following')
+        .snapshots()
+        .asyncMap((snap) async {
+      final users = <UserModel>[];
+      for (final doc in snap.docs) {
+        final userDoc = await _firestore.collection('users').doc(doc.id).get();
+        if (userDoc.exists) users.add(UserModel.fromFirestore(userDoc));
+      }
+      return users;
+    });
+  }
+
+  /// Get suggested users (same city/state, not already following)
+  Future<List<UserModel>> getSuggestedUsers(String currentUid, {String? city, String? state, int limit = 20}) async {
+    final snap = await _firestore.collection('users').get();
+    final followingSnap = await _firestore
+        .collection('follows')
+        .doc(currentUid)
+        .collection('following')
+        .get();
+    final followingIds = followingSnap.docs.map((d) => d.id).toSet();
+
+    final users = snap.docs
+        .map((d) => UserModel.fromFirestore(d))
+        .where((u) => u.uid != currentUid && !followingIds.contains(u.uid))
+        .toList();
+
+    // Sort: same city first, then same state, then others
+    users.sort((a, b) {
+      int aScore = 0, bScore = 0;
+      if (city != null && a.city?.toLowerCase() == city.toLowerCase()) aScore += 2;
+      if (state != null && a.state?.toLowerCase() == state.toLowerCase()) aScore += 1;
+      if (city != null && b.city?.toLowerCase() == city.toLowerCase()) bScore += 2;
+      if (state != null && b.state?.toLowerCase() == state.toLowerCase()) bScore += 1;
+      return bScore.compareTo(aScore);
+    });
+
+    return users.take(limit).toList();
+  }
+
+  // ══════════════════ DIRECT MESSAGING ══════════════════
+
+  /// Get conversation ID for two users (deterministic)
+  String getConversationId(String uid1, String uid2) {
+    final sorted = [uid1, uid2]..sort();
+    return '${sorted[0]}_${sorted[1]}';
+  }
+
+  /// Send a message (creates conversation if needed)
+  Future<void> sendMessage({
+    required String currentUid,
+    required String otherUid,
+    required String text,
+    required String currentName,
+    String? currentPhoto,
+    required String otherName,
+    String? otherPhoto,
+  }) async {
+    final conversationId = getConversationId(currentUid, otherUid);
+    final convRef = _firestore.collection('conversations').doc(conversationId);
+    final msgRef = convRef.collection('messages').doc();
+    final now = DateTime.now();
+
+    final batch = _firestore.batch();
+
+    // Create/update conversation
+    batch.set(convRef, {
+      'participants': [currentUid, otherUid],
+      'lastMessage': text,
+      'lastSenderUid': currentUid,
+      'lastMessageTime': Timestamp.fromDate(now),
+      'unreadCounts.$otherUid': FieldValue.increment(1),
+      'participantNames.$currentUid': currentName,
+      'participantNames.$otherUid': otherName,
+      'participantPhotos.$currentUid': currentPhoto,
+      'participantPhotos.$otherUid': otherPhoto,
+    }, SetOptions(merge: true));
+
+    // Add message
+    batch.set(msgRef, MessageModel(
+      id: msgRef.id,
+      senderUid: currentUid,
+      text: text,
+      createdAt: now,
+    ).toFirestore());
+
+    await batch.commit();
+  }
+
+  /// Get conversations for a user
+  Stream<List<ConversationModel>> getConversations(String uid) {
+    return _firestore
+        .collection('conversations')
+        .where('participants', arrayContains: uid)
+        .snapshots()
+        .map((snap) {
+      final convs = snap.docs.map((d) => ConversationModel.fromFirestore(d)).toList();
+      convs.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+      return convs;
+    });
+  }
+
+  /// Get messages for a conversation
+  Stream<List<MessageModel>> getMessages(String conversationId) {
+    return _firestore
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => MessageModel.fromFirestore(d)).toList());
+  }
+
+  /// Mark messages as read
+  Future<void> markMessagesRead(String conversationId, String uid) async {
+    await _firestore.collection('conversations').doc(conversationId).update({
+      'unreadCounts.$uid': 0,
+    });
+  }
+
+  /// Get total unread message count for a user
+  Stream<int> getTotalUnreadCount(String uid) {
+    return _firestore
+        .collection('conversations')
+        .where('participants', arrayContains: uid)
+        .snapshots()
+        .map((snap) {
+      int total = 0;
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final unread = (data['unreadCounts'] as Map<String, dynamic>?)?[uid];
+        if (unread != null) total += (unread as num).toInt();
+      }
+      return total;
+    });
+  }
+
+  // ══════════════════ GROUPS ══════════════════
+
+  /// Create a group
+  Future<String> createGroup({
+    required String name,
+    required String description,
+    required String category,
+    required String createdBy,
+    required String createdByName,
+  }) async {
+    final now = DateTime.now();
+    final docRef = await _firestore.collection('groups').add(GroupModel(
+      id: '',
+      name: name,
+      description: description,
+      category: category,
+      createdBy: createdBy,
+      createdByName: createdByName,
+      members: [createdBy],
+      memberCount: 1,
+      lastMessageTime: now,
+      createdAt: now,
+    ).toFirestore());
+    return docRef.id;
+  }
+
+  /// Join a group
+  Future<void> joinGroup(String groupId, String uid) async {
+    await _firestore.collection('groups').doc(groupId).update({
+      'members': FieldValue.arrayUnion([uid]),
+      'memberCount': FieldValue.increment(1),
+    });
+  }
+
+  /// Leave a group
+  Future<void> leaveGroup(String groupId, String uid) async {
+    await _firestore.collection('groups').doc(groupId).update({
+      'members': FieldValue.arrayRemove([uid]),
+      'memberCount': FieldValue.increment(-1),
+    });
+  }
+
+  /// Send a group message
+  Future<void> sendGroupMessage({
+    required String groupId,
+    required String senderUid,
+    required String senderName,
+    String? senderPhotoUrl,
+    required String text,
+  }) async {
+    final now = DateTime.now();
+    final msgRef = _firestore.collection('groups').doc(groupId).collection('messages').doc();
+    final batch = _firestore.batch();
+
+    batch.set(msgRef, GroupMessageModel(
+      id: msgRef.id,
+      senderUid: senderUid,
+      senderName: senderName,
+      senderPhotoUrl: senderPhotoUrl,
+      text: text,
+      createdAt: now,
+    ).toFirestore());
+
+    batch.update(_firestore.collection('groups').doc(groupId), {
+      'lastMessage': text,
+      'lastSenderName': senderName,
+      'lastMessageTime': Timestamp.fromDate(now),
+    });
+
+    await batch.commit();
+  }
+
+  /// Get all groups
+  Stream<List<GroupModel>> getAllGroups() {
+    return _firestore
+        .collection('groups')
+        .snapshots()
+        .map((snap) {
+      final groups = snap.docs.map((d) => GroupModel.fromFirestore(d)).toList();
+      groups.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+      return groups;
+    });
+  }
+
+  /// Get groups user is a member of
+  Stream<List<GroupModel>> getUserGroups(String uid) {
+    return _firestore
+        .collection('groups')
+        .where('members', arrayContains: uid)
+        .snapshots()
+        .map((snap) {
+      final groups = snap.docs.map((d) => GroupModel.fromFirestore(d)).toList();
+      groups.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+      return groups;
+    });
+  }
+
+  /// Get group messages
+  Stream<List<GroupMessageModel>> getGroupMessages(String groupId) {
+    return _firestore
+        .collection('groups')
+        .doc(groupId)
+        .collection('messages')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => GroupMessageModel.fromFirestore(d)).toList());
+  }
+
+  // ══════════════════ ONLINE STATUS ══════════════════
+
+  /// Set user online/offline status
+  Future<void> setOnlineStatus(String uid, bool isOnline) async {
+    final updates = <String, dynamic>{
+      'isOnline': isOnline,
+    };
+    if (!isOnline) {
+      updates['lastSeen'] = Timestamp.fromDate(DateTime.now());
+    }
+    await _firestore.collection('users').doc(uid).update(updates);
   }
 }
