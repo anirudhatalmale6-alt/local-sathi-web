@@ -19,6 +19,11 @@ class AuthService {
     required Function(String error) onError,
     required Function(PhoneAuthCredential credential) onAutoVerified,
   }) async {
+    // Force reCAPTCHA flow on Android to bypass Play Integrity SHA-1 check
+    try {
+      await _auth.setSettings(forceRecaptchaFlow: true);
+    } catch (_) {}
+
     await _auth.verifyPhoneNumber(
       phoneNumber: phoneNumber,
       verificationCompleted: onAutoVerified,
