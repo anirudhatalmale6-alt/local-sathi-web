@@ -23,7 +23,24 @@ class AuthService {
       phoneNumber: phoneNumber,
       verificationCompleted: onAutoVerified,
       verificationFailed: (FirebaseAuthException e) {
-        onError(e.message ?? 'Verification failed');
+        String msg;
+        switch (e.code) {
+          case 'too-many-requests':
+            msg = 'Too many OTP requests. Please wait 1-2 hours before trying again.';
+            break;
+          case 'invalid-phone-number':
+            msg = 'Invalid phone number. Please check and try again.';
+            break;
+          case 'quota-exceeded':
+            msg = 'SMS quota exceeded. Please try again later.';
+            break;
+          case 'network-request-failed':
+            msg = 'No internet connection. Please check your network.';
+            break;
+          default:
+            msg = e.message ?? 'Verification failed. Please try again.';
+        }
+        onError(msg);
       },
       codeSent: (String verificationId, int? resendToken) {
         onCodeSent(verificationId);

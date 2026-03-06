@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -26,6 +27,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   String? _verificationId;
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
+
+  // Cooldown timer for resend
+  int _cooldownSeconds = 0;
+  Timer? _cooldownTimer;
 
   @override
   void initState() {
@@ -57,9 +62,22 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     listenForCode();
   }
 
+  void _startCooldown() {
+    _cooldownSeconds = 30;
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_cooldownSeconds > 0) {
+        setState(() => _cooldownSeconds--);
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
   @override
   void dispose() {
     cancel(); // Stop SMS listener
+    _cooldownTimer?.cancel();
     _phoneController.dispose();
     _otpController.dispose();
     _animController.dispose();
@@ -85,6 +103,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           _otpSent = true;
           _isLoading = false;
         });
+        _startCooldown();
         _startListeningForSms();
       },
       onError: (error) {
@@ -354,19 +373,39 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
                         if (_otpSent) ...[
                           const SizedBox(height: 12),
-                          Center(
-                            child: TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  _otpSent = false;
-                                  _otpController.clear();
-                                });
-                              },
-                              child: const Text(
-                                'Change phone number',
-                                style: TextStyle(color: AppColors.teal),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              TextButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _otpSent = false;
+                                    _otpController.clear();
+                                    _cooldownTimer?.cancel();
+                                    _cooldownSeconds = 0;
+                                  });
+                                },
+                                child: const Text(
+                                  'Change number',
+                                  style: TextStyle(color: AppColors.teal),
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              TextButton(
+                                onPressed: _cooldownSeconds > 0 ? null : _sendOTP,
+                                child: Text(
+                                  _cooldownSeconds > 0
+                                      ? 'Resend in ${_cooldownSeconds}s'
+                                      : 'Resend OTP',
+                                  style: TextStyle(
+                                    color: _cooldownSeconds > 0
+                                        ? AppColors.textMuted
+                                        : AppColors.orange,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ],
