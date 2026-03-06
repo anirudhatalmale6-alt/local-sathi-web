@@ -7,7 +7,8 @@ import '../../widgets/provider_card.dart';
 import '../provider_detail/provider_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key});
+  final String? initialCategory;
+  const SearchScreen({super.key, this.initialCategory});
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -16,8 +17,14 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _searchController = TextEditingController();
   final _firestoreService = FirestoreService();
-  String _selectedCategory = 'All';
+  late String _selectedCategory;
   double _radiusKm = 5;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCategory = widget.initialCategory ?? 'All';
+  }
 
   @override
   void dispose() {

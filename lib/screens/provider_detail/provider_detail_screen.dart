@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
 import '../../models/review_model.dart';
 import '../../services/firestore_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/avatar_widget.dart';
 
 class ProviderDetailScreen extends StatelessWidget {
@@ -162,8 +165,31 @@ class ProviderDetailScreen extends StatelessWidget {
                         _buildVerificationsSection(),
                         const SizedBox(height: 20),
 
-                        // Reviews header
-                        const Text('Reviews', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+                        // Reviews header + Write Review button
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('Reviews', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text)),
+                            GestureDetector(
+                              onTap: () => _showReviewDialog(context),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(colors: [AppColors.teal, Color(0xFF00897B)]),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.rate_review_rounded, size: 14, color: Colors.white),
+                                    SizedBox(width: 4),
+                                    Text('Write Review', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 8),
                       ],
                     ),
@@ -580,6 +606,22 @@ class ProviderDetailScreen extends StatelessWidget {
     return DateFormat('d MMM yyyy').format(dateTime);
   }
 
+  void _showReviewDialog(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ReviewSheet(
+        providerUid: provider.uid,
+        providerName: provider.name,
+        reviewerUid: currentUser.uid,
+      ),
+    );
+  }
+
   void _launchCall(BuildContext context) async {
     final uri = Uri(scheme: 'tel', path: provider.phone);
     if (await canLaunchUrl(uri)) {
@@ -597,5 +639,263 @@ class ProviderDetailScreen extends StatelessWidget {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+  }
+}
+
+/// Review bottom sheet with voice input support
+class _ReviewSheet extends StatefulWidget {
+  final String providerUid;
+  final String providerName;
+  final String reviewerUid;
+
+  const _ReviewSheet({
+    required this.providerUid,
+    required this.providerName,
+    required this.reviewerUid,
+  });
+
+  @override
+  State<_ReviewSheet> createState() => _ReviewSheetState();
+}
+
+class _ReviewSheetState extends State<_ReviewSheet> {
+  final _textController = TextEditingController();
+  double _rating = 5.0;
+  bool _isSubmitting = false;
+
+  // Voice
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _isListening = false;
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _speech.stop();
+    super.dispose();
+  }
+
+  void _toggleVoice() async {
+    if (_isListening) {
+      _speech.stop();
+      setState(() => _isListening = false);
+      return;
+    }
+
+    bool available = await _speech.initialize(
+      onError: (error) => setState(() => _isListening = false),
+    );
+
+    if (available) {
+      setState(() => _isListening = true);
+      _speech.listen(
+        onResult: (result) {
+          setState(() {
+            _textController.text = result.recognizedWords;
+          });
+          if (result.finalResult) {
+            setState(() => _isListening = false);
+          }
+        },
+        localeId: 'hi_IN',
+        listenFor: const Duration(seconds: 30),
+      );
+    }
+  }
+
+  void _submit() async {
+    if (_textController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please write or record your review')),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      // Get reviewer profile
+      final authService = AuthService();
+      final profile = await authService.getUserProfile(widget.reviewerUid);
+
+      final review = ReviewModel(
+        id: '',
+        providerUid: widget.providerUid,
+        reviewerUid: widget.reviewerUid,
+        reviewerName: profile?.name ?? 'User',
+        reviewerPhotoUrl: profile?.profilePhotoUrl,
+        rating: _rating,
+        text: _textController.text.trim(),
+        createdAt: DateTime.now(),
+      );
+
+      await FirestoreService().addReview(review);
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Review submitted! +15 Sathi Points earned'),
+            backgroundColor: AppColors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSubmitting = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.red),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).viewInsets.bottom + 20),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Text(
+              'Review ${widget.providerName}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.text),
+            ),
+            const SizedBox(height: 16),
+
+            // Star rating
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(5, (i) {
+                return GestureDetector(
+                  onTap: () => setState(() => _rating = (i + 1).toDouble()),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(
+                      i < _rating ? Icons.star_rounded : Icons.star_outline_rounded,
+                      size: 40,
+                      color: i < _rating ? AppColors.gold : AppColors.textMuted,
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _rating >= 5
+                  ? 'Excellent!'
+                  : _rating >= 4
+                      ? 'Very Good'
+                      : _rating >= 3
+                          ? 'Good'
+                          : _rating >= 2
+                              ? 'Fair'
+                              : 'Poor',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textMuted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Text input with mic button
+            TextField(
+              controller: _textController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: _isListening
+                    ? 'Listening... apni baat bolein'
+                    : 'Write your review or tap mic to speak...',
+                hintStyle: TextStyle(
+                  color: _isListening ? AppColors.red : AppColors.textMuted,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(color: AppColors.bg),
+                ),
+                filled: true,
+                fillColor: AppColors.bg,
+                suffixIcon: GestureDetector(
+                  onTap: _toggleVoice,
+                  child: Container(
+                    margin: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _isListening ? AppColors.red : AppColors.teal,
+                    ),
+                    child: Icon(
+                      _isListening ? Icons.stop : Icons.mic,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (_isListening)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.red,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Recording... speak in Hindi or English',
+                      style: TextStyle(fontSize: 12, color: AppColors.red),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // Submit button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isSubmitting ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+                child: _isSubmitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text(
+                        'Submit Review',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -12,6 +12,7 @@ import '../provider_detail/provider_detail_screen.dart';
 import '../emergency/emergency_sheet.dart';
 import '../wallet/wallet_screen.dart';
 import '../work_nearby/work_nearby_screen.dart';
+import '../ai_chat/ai_chat_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -276,6 +277,48 @@ class HomeScreen extends StatelessWidget {
                             SizedBox(width: 8),
                             Text(
                               'Wallet',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+
+                  // Sathi AI
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AiChatScreen()),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF7B1FA2), Color(0xFFAB47BC)],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF7B1FA2).withAlpha(60),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('🤖', style: TextStyle(fontSize: 18)),
+                            SizedBox(width: 6),
+                            Text(
+                              'AI',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w800,
