@@ -221,14 +221,18 @@ class FirestoreService {
 
   // ══════════════════ ADMIN ══════════════════
 
-  // Get pending verifications
+  // Get pending verifications (client-side filter to avoid composite index)
   Stream<List<UserModel>> getPendingVerifications() {
     return _firestore
         .collection('users')
-        .where('verificationStatus', isEqualTo: 'pending')
-        .where('aadhaarDocUrl', isNull: false)
         .snapshots()
-        .map((snap) => snap.docs.map((d) => UserModel.fromFirestore(d)).toList());
+        .map((snap) => snap.docs
+            .map((d) => UserModel.fromFirestore(d))
+            .where((u) =>
+                u.verificationStatus == VerificationStatus.pending &&
+                u.aadhaarDocUrl != null &&
+                u.aadhaarDocUrl!.isNotEmpty)
+            .toList());
   }
 
   // Approve/reject verification
