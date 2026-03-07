@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 import '../../../config/theme.dart';
 import '../../../services/firestore_service.dart';
@@ -25,15 +26,21 @@ class _DashboardPageState extends State<DashboardPage> {
   String? _error;
 
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() { _loading = true; _error = null; });
     try {
+      debugPrint('Dashboard: loading stats...');
       final stats = await _firestore.getAppStats()
           .timeout(const Duration(seconds: 15));
+      debugPrint('Dashboard: stats loaded: $stats');
       Map<String, dynamic> geo = {};
       try {
         geo = await _firestore.getGeographicStats()
             .timeout(const Duration(seconds: 10));
-      } catch (_) {}
+        debugPrint('Dashboard: geo loaded with ${geo.length} states');
+      } catch (e) {
+        debugPrint('Dashboard: geo failed: $e');
+      }
       if (mounted) {
         setState(() {
           _stats = stats;
@@ -42,10 +49,11 @@ class _DashboardPageState extends State<DashboardPage> {
         });
       }
     } catch (e) {
+      debugPrint('Dashboard: load failed: $e');
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Could not load dashboard data. Pull down to retry.';
+          _error = 'Could not load dashboard data. Tap retry.';
         });
       }
     }

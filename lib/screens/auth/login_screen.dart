@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sms_autofill/sms_autofill.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../services/auth_service.dart';
@@ -25,6 +26,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _otpSent = false;
   bool _isLoading = false;
   String? _verificationId;
+  bool _usedRestApi = false; // Track if we used REST API for OTP
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
@@ -45,14 +47,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     _animController.forward();
   }
 
-  /// Called by CodeAutoFill mixin when SMS code is detected
   @override
   void codeUpdated() {
     if (code != null && code!.length == 6) {
-      setState(() {
-        _otpController.text = code!;
-      });
-      // Auto-verify once OTP is filled
+      setState(() => _otpController.text = code!);
       _verifyOTP();
     }
   }
@@ -76,7 +74,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   void dispose() {
-    cancel(); // Stop SMS listener
+    cancel();
     _cooldownTimer?.cancel();
     _phoneController.dispose();
     _otpController.dispose();
@@ -91,34 +89,106 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       return;
     }
 
-    setState(() => _isLoading = true);
-
     final fullPhone = phone.startsWith('+') ? phone : '+91$phone';
 
-    await _authService.verifyPhone(
-      phoneNumber: fullPhone,
-      onCodeSent: (verificationId) {
-        setState(() {
-          _verificationId = verificationId;
-          _otpSent = true;
-          _isLoading = false;
-        });
-        _startCooldown();
-        _startListeningForSms();
-      },
-      onError: (error) {
-        setState(() => _isLoading = false);
-        _showError(error);
-      },
-      onAutoVerified: (credential) async {
-        setState(() => _isLoading = true);
-        try {
-          final userCred = await _authService.signInWithCredential(credential);
-          await _handleSignIn(userCred);
-        } catch (e) {
-          setState(() => _isLoading = false);
-          _showError('Auto verification failed');
-        }
+    if (kIsWeb) {
+      // Web: use SDK directly (works with built-in reCAPTCHA)
+      setState(() => _isLoading = true);
+      _usedRestApi = false;
+      await _authService.verifyPhoneViaSdk(
+        phoneNumber: fullPhone,
+        onCodeSent: _onCodeSent,
+        onError: _onSdkError,
+        onAutoVerified: _onAutoVerified,
+      );
+    } else {
+      // Android: try SDK first, fallback to REST API with reCAPTCHA
+      setState(() => _isLoading = true);
+      _usedRestApi = false;
+
+      // Try SDK approach first (will use forceRecaptchaFlow)
+      bool sdkFailed = false;
+      await _authService.verifyPhoneViaSdk(
+        phoneNumber: fullPhone,
+        onCodeSent: _onCodeSent,
+        onError: (error) {
+          sdkFailed = true;
+          debugPrint('SDK phone auth failed: $error');
+          // Don't show error yet - try REST API fallback
+          _tryRestApiFallback(fullPhone);
+        },
+        onAutoVerified: _onAutoVerified,
+      );
+    }
+  }
+
+  void _onCodeSent(String verificationId) {
+    setState(() {
+      _verificationId = verificationId;
+      _otpSent = true;
+      _isLoading = false;
+    });
+    _startCooldown();
+    _startListeningForSms();
+  }
+
+  void _onSdkError(String error) {
+    setState(() => _isLoading = false);
+    _showError(error);
+  }
+
+  void _onAutoVerified(PhoneAuthCredential credential) async {
+    setState(() => _isLoading = true);
+    try {
+      final userCred = await _authService.signInWithCredential(credential);
+      await _handleSignIn(userCred);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showError('Auto verification failed');
+    }
+  }
+
+  /// Fallback: show reCAPTCHA WebView, then use REST API
+  void _tryRestApiFallback(String fullPhone) {
+    setState(() => _isLoading = false);
+
+    // Show full-screen reCAPTCHA dialog
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Dialog.fullscreen(
+          child: Scaffold(
+            appBar: AppBar(
+              title: const Text('Verification'),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.of(ctx).pop(),
+              ),
+            ),
+            body: _RecaptchaWebView(
+              onToken: (token) async {
+                Navigator.of(ctx).pop();
+                setState(() => _isLoading = true);
+                try {
+                  final sessionInfo = await _authService.sendOTPViaRest(
+                    phoneNumber: fullPhone,
+                    recaptchaToken: token,
+                  );
+                  _usedRestApi = true;
+                  _onCodeSent(sessionInfo);
+                } catch (e) {
+                  setState(() => _isLoading = false);
+                  _showError(e.toString());
+                }
+              },
+              onError: () {
+                Navigator.of(ctx).pop();
+                _showError('Verification failed. Please try again.');
+              },
+            ),
+          ),
+        );
       },
     );
   }
@@ -133,10 +203,20 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     setState(() => _isLoading = true);
 
     try {
-      final userCred = await _authService.signInWithOTP(
-        verificationId: _verificationId!,
-        otp: otp,
-      );
+      UserCredential userCred;
+      if (_usedRestApi) {
+        // Verify via REST API
+        userCred = await _authService.verifyOTPViaRest(
+          sessionInfo: _verificationId!,
+          otp: otp,
+        );
+      } else {
+        // Verify via SDK
+        userCred = await _authService.signInWithOTP(
+          verificationId: _verificationId!,
+          otp: otp,
+        );
+      }
       await _handleSignIn(userCred);
     } catch (e) {
       setState(() => _isLoading = false);
@@ -150,12 +230,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     if (!mounted) return;
 
     if (existingUser != null) {
-      // Existing user - go to main screen
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const MainShell()),
       );
     } else {
-      // New user - go to welcome/onboarding
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => WelcomeScreen(
@@ -191,7 +269,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               child: Column(
                 children: [
                   const SizedBox(height: 60),
-                  // Logo area
                   Container(
                     width: 100,
                     height: 100,
@@ -199,19 +276,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       shape: BoxShape.circle,
                       color: Colors.white.withOpacity(0.15),
                     ),
-                    child: const Icon(
-                      Icons.location_on,
-                      size: 50,
-                      color: Colors.white,
-                    ),
+                    child: const Icon(Icons.location_on, size: 50, color: Colors.white),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     AppConstants.taglineHindi,
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
+                    style: TextStyle(fontSize: 16, color: Colors.white.withOpacity(0.9)),
                   ),
                   const SizedBox(height: 4),
                   RichText(
@@ -219,19 +289,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       children: [
                         TextSpan(
                           text: 'LOCAL ',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
+                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white),
                         ),
                         TextSpan(
                           text: 'SATHI',
-                          style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.orange,
-                          ),
+                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.orange),
                         ),
                       ],
                     ),
@@ -239,11 +301,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   const SizedBox(height: 4),
                   Text(
                     AppConstants.taglineEnglish,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.7),
-                      letterSpacing: 1.5,
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.7), letterSpacing: 1.5),
                   ),
                   const SizedBox(height: 60),
 
@@ -254,11 +312,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 32,
-                          offset: const Offset(0, 8),
-                        ),
+                        BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 32, offset: const Offset(0, 8)),
                       ],
                     ),
                     child: Column(
@@ -266,21 +320,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       children: [
                         Text(
                           _otpSent ? 'Enter OTP' : 'Welcome!',
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.text,
-                          ),
+                          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.text),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _otpSent
-                              ? 'OTP will be detected automatically'
-                              : 'Sign in with your phone number',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                          ),
+                          _otpSent ? 'OTP will be detected automatically' : 'Sign in with your phone number',
+                          style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 24),
 
@@ -299,16 +344,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Text(
-                                      '🇮🇳 +91',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                                    const Text('\u{1F1EE}\u{1F1F3} +91',
+                                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                                     Container(
-                                      width: 1,
-                                      height: 24,
+                                      width: 1, height: 24,
                                       margin: const EdgeInsets.only(left: 8),
                                       color: AppColors.textMuted.withOpacity(0.3),
                                     ),
@@ -326,13 +365,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                               LengthLimitingTextInputFormatter(6),
                             ],
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 8,
-                            ),
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: 8),
                             decoration: const InputDecoration(
-                              hintText: '• • • • • •',
+                              hintText: '\u2022 \u2022 \u2022 \u2022 \u2022 \u2022',
                               hintStyle: TextStyle(letterSpacing: 8),
                             ),
                           ),
@@ -343,30 +378,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            onPressed: _isLoading
-                                ? null
-                                : (_otpSent ? _verifyOTP : _sendOTP),
+                            onPressed: _isLoading ? null : (_otpSent ? _verifyOTP : _sendOTP),
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             ),
                             child: _isLoading
                                 ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
+                                    height: 20, width: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                   )
                                 : Text(
                                     _otpSent ? 'Verify OTP' : 'Send OTP',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                                   ),
                           ),
                         ),
@@ -385,22 +409,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     _cooldownSeconds = 0;
                                   });
                                 },
-                                child: const Text(
-                                  'Change number',
-                                  style: TextStyle(color: AppColors.teal),
-                                ),
+                                child: const Text('Change number', style: TextStyle(color: AppColors.teal)),
                               ),
                               const SizedBox(width: 8),
                               TextButton(
                                 onPressed: _cooldownSeconds > 0 ? null : _sendOTP,
                                 child: Text(
-                                  _cooldownSeconds > 0
-                                      ? 'Resend in ${_cooldownSeconds}s'
-                                      : 'Resend OTP',
+                                  _cooldownSeconds > 0 ? 'Resend in ${_cooldownSeconds}s' : 'Resend OTP',
                                   style: TextStyle(
-                                    color: _cooldownSeconds > 0
-                                        ? AppColors.textMuted
-                                        : AppColors.orange,
+                                    color: _cooldownSeconds > 0 ? AppColors.textMuted : AppColors.orange,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -417,6 +434,113 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Full-screen reCAPTCHA WebView widget
+class _RecaptchaWebView extends StatefulWidget {
+  final Function(String token) onToken;
+  final VoidCallback onError;
+
+  const _RecaptchaWebView({required this.onToken, required this.onError});
+
+  @override
+  State<_RecaptchaWebView> createState() => _RecaptchaWebViewState();
+}
+
+class _RecaptchaWebViewState extends State<_RecaptchaWebView> {
+  late final WebViewController _controller;
+  bool _loading = true;
+
+  static const _recaptchaHtml = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Verify</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: #f5f5f5;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .container {
+    text-align: center;
+    padding: 24px;
+  }
+  h3 { color: #333; margin-bottom: 8px; font-size: 18px; }
+  p { color: #888; font-size: 14px; margin-bottom: 24px; }
+  .g-recaptcha { display: inline-block; }
+  .done { color: #00897B; font-size: 18px; font-weight: 600; margin-top: 20px; }
+</style>
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+</head>
+<body>
+<div class="container">
+  <h3>Quick Security Check</h3>
+  <p>Complete the check below to verify your phone number</p>
+  <div class="g-recaptcha"
+       data-sitekey="6LcMZR0UAAAAALgPMcgHwga7gY5p8QMg1Hj-bmUv"
+       data-callback="onSuccess"
+       data-theme="light"
+       data-size="normal"></div>
+  <div class="done" id="done" style="display:none">Verified! Sending OTP...</div>
+</div>
+<script>
+function onSuccess(token) {
+  document.getElementById('done').style.display = 'block';
+  document.querySelector('.g-recaptcha').style.display = 'none';
+  if (window.RecaptchaChannel) {
+    RecaptchaChannel.postMessage(token);
+  }
+}
+</script>
+</body>
+</html>
+''';
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel(
+        'RecaptchaChannel',
+        onMessageReceived: (message) {
+          widget.onToken(message.message);
+        },
+      )
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (_) {
+            if (mounted) setState(() => _loading = false);
+          },
+          onWebResourceError: (_) {
+            widget.onError();
+          },
+        ),
+      )
+      ..loadHtmlString(
+        _recaptchaHtml,
+        baseUrl: 'https://local-sathi-eced8.firebaseapp.com',
+      );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        WebViewWidget(controller: _controller),
+        if (_loading)
+          const Center(child: CircularProgressIndicator(color: AppColors.teal)),
+      ],
     );
   }
 }

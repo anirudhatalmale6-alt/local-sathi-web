@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
 import '../models/wallet_model.dart';
 import '../config/constants.dart';
@@ -10,17 +12,115 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Android API key from google-services.json
+  static const _apiKey = 'AIzaSyDNOCIYHqUr-D3qX0Hk5on8dykkvrhB5tY';
+
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  // Phone OTP verification
-  Future<void> verifyPhone({
+  /// Send OTP via REST API with reCAPTCHA token
+  /// Returns sessionInfo (used as verificationId)
+  Future<String> sendOTPViaRest({
+    required String phoneNumber,
+    required String recaptchaToken,
+  }) async {
+    final response = await http.post(
+      Uri.parse(
+        'https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=$_apiKey',
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'phoneNumber': phoneNumber,
+        'recaptchaToken': recaptchaToken,
+      }),
+    );
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    debugPrint('sendVerificationCode response: ${response.statusCode}');
+
+    if (data.containsKey('sessionInfo')) {
+      return data['sessionInfo'] as String;
+    }
+
+    // Handle errors
+    final error = data['error'] as Map<String, dynamic>?;
+    final message = error?['message'] as String? ?? 'Unknown error';
+
+    if (message.contains('TOO_MANY_ATTEMPTS') || message.contains('too-many-requests')) {
+      throw 'Too many OTP requests. Please wait 1-2 hours before trying again.';
+    } else if (message.contains('INVALID_PHONE_NUMBER')) {
+      throw 'Invalid phone number. Please check and try again.';
+    } else if (message.contains('QUOTA_EXCEEDED')) {
+      throw 'SMS quota exceeded. Please try again later.';
+    }
+    throw 'Could not send OTP. Please try again.';
+  }
+
+  /// Verify OTP via REST API and sign into Firebase
+  Future<UserCredential> verifyOTPViaRest({
+    required String sessionInfo,
+    required String otp,
+  }) async {
+    final response = await http.post(
+      Uri.parse(
+        'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=$_apiKey',
+      ),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'sessionInfo': sessionInfo,
+        'code': otp,
+      }),
+    );
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    debugPrint('signInWithPhoneNumber response: ${response.statusCode}');
+
+    if (data.containsKey('error')) {
+      final errMsg = (data['error'] as Map<String, dynamic>)['message'] ?? '';
+      if (errMsg.toString().contains('INVALID_CODE') ||
+          errMsg.toString().contains('SESSION_EXPIRED')) {
+        throw 'Invalid OTP. Please try again.';
+      }
+      throw 'Verification failed. Please try again.';
+    }
+
+    // REST API succeeded. Now sign into the Firebase SDK.
+    // First try PhoneAuthProvider.credential (works if backend session is compatible)
+    try {
+      final credential = PhoneAuthProvider.credential(
+        verificationId: sessionInfo,
+        smsCode: otp,
+      );
+      return await _auth.signInWithCredential(credential);
+    } catch (e) {
+      debugPrint('SDK signInWithCredential failed: $e');
+    }
+
+    // Fallback: the REST API already authenticated the user.
+    // The idToken proves the user is verified. Reload auth state.
+    // Try reloading to pick up the session.
+    await Future.delayed(const Duration(milliseconds: 500));
+    await _auth.currentUser?.reload();
+    if (_auth.currentUser != null) {
+      // User is signed in through REST, create a fake UserCredential
+      // by signing in again with the same credential
+      final credential = PhoneAuthProvider.credential(
+        verificationId: sessionInfo,
+        smsCode: otp,
+      );
+      return await _auth.signInWithCredential(credential);
+    }
+
+    throw 'Sign in failed. Please try again.';
+  }
+
+  /// SDK-based phone verification (for web or when Play Integrity works)
+  Future<void> verifyPhoneViaSdk({
     required String phoneNumber,
     required Function(String verificationId) onCodeSent,
     required Function(String error) onError,
     required Function(PhoneAuthCredential credential) onAutoVerified,
   }) async {
-    // On Android, force reCAPTCHA fallback in case Play Integrity hasn't propagated yet
     if (!kIsWeb) {
       await _auth.setSettings(forceRecaptchaFlow: true);
     }
@@ -55,7 +155,7 @@ class AuthService {
     );
   }
 
-  // Sign in with OTP
+  // Sign in with OTP (SDK approach)
   Future<UserCredential> signInWithOTP({
     required String verificationId,
     required String otp,
