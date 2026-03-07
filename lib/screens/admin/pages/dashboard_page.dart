@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../config/theme.dart';
 import '../../../services/firestore_service.dart';
@@ -21,11 +22,18 @@ class _DashboardPageState extends State<DashboardPage> {
     _loadData();
   }
 
+  String? _error;
+
   Future<void> _loadData() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _error = null; });
     try {
-      final stats = await _firestore.getAppStats();
-      final geo = await _firestore.getGeographicStats();
+      final stats = await _firestore.getAppStats()
+          .timeout(const Duration(seconds: 15));
+      Map<String, dynamic> geo = {};
+      try {
+        geo = await _firestore.getGeographicStats()
+            .timeout(const Duration(seconds: 10));
+      } catch (_) {}
       if (mounted) {
         setState(() {
           _stats = stats;
@@ -33,15 +41,51 @@ class _DashboardPageState extends State<DashboardPage> {
           _loading = false;
         });
       }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Could not load dashboard data. Pull down to retry.';
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.teal));
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: AppColors.teal),
+            SizedBox(height: 16),
+            Text('Loading dashboard...', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          ],
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off, size: 48, color: AppColors.textMuted),
+              const SizedBox(height: 16),
+              Text(_error!, style: const TextStyle(color: AppColors.textSecondary, fontSize: 14), textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: _loadData,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return RefreshIndicator(
@@ -192,15 +236,11 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
       child: Column(
         children: states.map((state) {
-          final data = _geoStats[state] as Map<String, dynamic>;
-          final cities = data.keys.toList()..sort();
-          int totalUsers = 0;
-          int totalProviders = 0;
-          for (final city in cities) {
-            final c = data[city] as Map<String, dynamic>;
-            totalUsers += (c['users'] as int?) ?? 0;
-            totalProviders += (c['providers'] as int?) ?? 0;
-          }
+          final stateData = _geoStats[state] as Map<String, dynamic>;
+          final totalUsers = (stateData['total'] as int?) ?? 0;
+          final totalProviders = (stateData['providers'] as int?) ?? 0;
+          final citiesMap = (stateData['cities'] as Map<String, dynamic>?) ?? {};
+          final cityNames = citiesMap.keys.toList()..sort();
 
           return ExpansionTile(
             title: Text(state, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
@@ -215,14 +255,14 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               child: const Icon(Icons.location_on, size: 16, color: AppColors.tealDark),
             ),
-            children: cities.map((city) {
-              final c = data[city] as Map<String, dynamic>;
+            children: cityNames.map((city) {
+              final c = citiesMap[city] as Map<String, dynamic>? ?? {};
               return ListTile(
                 dense: true,
                 contentPadding: const EdgeInsets.only(left: 72, right: 16),
                 title: Text(city, style: const TextStyle(fontSize: 13)),
                 trailing: Text(
-                  '${c['users'] ?? 0} users · ${c['providers'] ?? 0} providers',
+                  '${c['total'] ?? 0} users · ${c['providers'] ?? 0} providers',
                   style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
                 ),
               );
