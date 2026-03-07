@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sms_autofill/sms_autofill.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../services/auth_service.dart';
@@ -92,81 +91,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       return;
     }
 
+    setState(() => _isLoading = true);
+
     final fullPhone = phone.startsWith('+') ? phone : '+91$phone';
 
-    if (!kIsWeb) {
-      // Android: show reCAPTCHA WebView first, then use REST API
-      _showRecaptchaAndSendOTP(fullPhone);
-    } else {
-      // Web: use SDK directly
-      setState(() => _isLoading = true);
-      await _sendOTPWithToken(fullPhone, null);
-    }
-  }
-
-  void _showRecaptchaAndSendOTP(String fullPhone) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      isDismissible: true,
-      builder: (ctx) {
-        return Container(
-          height: 420,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textMuted.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Quick Verification',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.text,
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Complete the check to receive your OTP',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: _RecaptchaWebView(
-                  onToken: (token) {
-                    Navigator.of(ctx).pop();
-                    setState(() => _isLoading = true);
-                    _sendOTPWithToken(fullPhone, token);
-                  },
-                  onError: () {
-                    Navigator.of(ctx).pop();
-                    _showError('Verification failed. Please try again.');
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _sendOTPWithToken(String fullPhone, String? recaptchaToken) async {
     await _authService.verifyPhone(
       phoneNumber: fullPhone,
-      recaptchaToken: recaptchaToken,
       onCodeSent: (verificationId) {
         setState(() {
           _verificationId = verificationId;
@@ -487,116 +417,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           ),
         ),
       ),
-    );
-  }
-}
-
-/// WebView widget that loads reCAPTCHA and returns the token
-class _RecaptchaWebView extends StatefulWidget {
-  final Function(String token) onToken;
-  final VoidCallback onError;
-
-  const _RecaptchaWebView({required this.onToken, required this.onError});
-
-  @override
-  State<_RecaptchaWebView> createState() => _RecaptchaWebViewState();
-}
-
-class _RecaptchaWebViewState extends State<_RecaptchaWebView> {
-  late final WebViewController _controller;
-  bool _loading = true;
-
-  static const _recaptchaHtml = '''
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Verify</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    background: #f5f5f5;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  }
-  .container {
-    background: white;
-    border-radius: 16px;
-    padding: 24px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-    text-align: center;
-    max-width: 340px;
-    width: 90%;
-  }
-  .g-recaptcha { display: inline-block; }
-  .done { color: #00897B; font-size: 16px; font-weight: 600; margin-top: 16px; }
-</style>
-<script src="https://www.google.com/recaptcha/api.js" async defer></script>
-</head>
-<body>
-<div class="container">
-  <div class="g-recaptcha"
-       data-sitekey="6LcMZR0UAAAAALgPMcgHwga7gY5p8QMg1Hj-bmUv"
-       data-callback="onSuccess"
-       data-theme="light"
-       data-size="normal"></div>
-  <div class="done" id="done" style="display:none">Verified! Sending OTP...</div>
-</div>
-<script>
-function onSuccess(token) {
-  document.getElementById('done').style.display = 'block';
-  document.querySelector('.g-recaptcha').style.display = 'none';
-  if (window.RecaptchaChannel) {
-    RecaptchaChannel.postMessage(token);
-  }
-}
-</script>
-</body>
-</html>
-''';
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..addJavaScriptChannel(
-        'RecaptchaChannel',
-        onMessageReceived: (message) {
-          widget.onToken(message.message);
-        },
-      )
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (_) {
-            if (mounted) setState(() => _loading = false);
-          },
-          onWebResourceError: (_) {
-            widget.onError();
-          },
-        ),
-      )
-      ..loadHtmlString(
-        _recaptchaHtml,
-        baseUrl: 'https://local-sathi-eced8.firebaseapp.com',
-      );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        WebViewWidget(controller: _controller),
-        if (_loading)
-          const Center(
-            child: CircularProgressIndicator(color: AppColors.teal),
-          ),
-      ],
     );
   }
 }

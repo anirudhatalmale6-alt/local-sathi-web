@@ -1,7 +1,7 @@
 name: local_sathi
 description: "Local Sathi - Your Community Companion. Find verified service providers in your neighbourhood."
 publish_to: 'none'
-version: 2.0.5+32
+version: 2.0.6+33
 
 environment:
   sdk: ^3.7.0
@@ -58,12 +58,6 @@ dependencies:
   # Share
   share_plus: ^10.1.4
 
-  # WebView (for reCAPTCHA phone auth)
-  webview_flutter: ^4.13.0
-
-  # HTTP
-  http: ^1.2.0
-
   # In-app download
   dio: ^5.7.0
   path_provider: ^2.1.5
@@ -89,4 +83,3 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
-    - assets/recaptcha.html
