@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sms_autofill/sms_autofill.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../services/auth_service.dart';
@@ -91,12 +92,81 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       return;
     }
 
-    setState(() => _isLoading = true);
-
     final fullPhone = phone.startsWith('+') ? phone : '+91$phone';
 
+    if (!kIsWeb) {
+      // Android: show reCAPTCHA WebView first, then use REST API
+      _showRecaptchaAndSendOTP(fullPhone);
+    } else {
+      // Web: use SDK directly
+      setState(() => _isLoading = true);
+      await _sendOTPWithToken(fullPhone, null);
+    }
+  }
+
+  void _showRecaptchaAndSendOTP(String fullPhone) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: true,
+      builder: (ctx) {
+        return Container(
+          height: 420,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textMuted.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Quick Verification',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.text,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Complete the check to receive your OTP',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _RecaptchaWebView(
+                  onToken: (token) {
+                    Navigator.of(ctx).pop();
+                    setState(() => _isLoading = true);
+                    _sendOTPWithToken(fullPhone, token);
+                  },
+                  onError: () {
+                    Navigator.of(ctx).pop();
+                    _showError('Verification failed. Please try again.');
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _sendOTPWithToken(String fullPhone, String? recaptchaToken) async {
     await _authService.verifyPhone(
       phoneNumber: fullPhone,
+      recaptchaToken: recaptchaToken,
       onCodeSent: (verificationId) {
         setState(() {
           _verificationId = verificationId;
@@ -417,6 +487,59 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           ),
         ),
       ),
+    );
+  }
+}
+
+/// WebView widget that loads reCAPTCHA and returns the token
+class _RecaptchaWebView extends StatefulWidget {
+  final Function(String token) onToken;
+  final VoidCallback onError;
+
+  const _RecaptchaWebView({required this.onToken, required this.onError});
+
+  @override
+  State<_RecaptchaWebView> createState() => _RecaptchaWebViewState();
+}
+
+class _RecaptchaWebViewState extends State<_RecaptchaWebView> {
+  late final WebViewController _controller;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..addJavaScriptChannel(
+        'RecaptchaChannel',
+        onMessageReceived: (message) {
+          widget.onToken(message.message);
+        },
+      )
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (_) {
+            if (mounted) setState(() => _loading = false);
+          },
+          onWebResourceError: (_) {
+            widget.onError();
+          },
+        ),
+      )
+      ..loadFlutterAsset('assets/recaptcha.html');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        WebViewWidget(controller: _controller),
+        if (_loading)
+          const Center(
+            child: CircularProgressIndicator(color: AppColors.teal),
+          ),
+      ],
     );
   }
 }
