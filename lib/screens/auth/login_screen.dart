@@ -506,6 +506,60 @@ class _RecaptchaWebViewState extends State<_RecaptchaWebView> {
   late final WebViewController _controller;
   bool _loading = true;
 
+  static const _recaptchaHtml = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Verify</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: #f5f5f5;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  .container {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    text-align: center;
+    max-width: 340px;
+    width: 90%;
+  }
+  .g-recaptcha { display: inline-block; }
+  .done { color: #00897B; font-size: 16px; font-weight: 600; margin-top: 16px; }
+</style>
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+</head>
+<body>
+<div class="container">
+  <div class="g-recaptcha"
+       data-sitekey="6LcMZR0UAAAAALgPMcgHwga7gY5p8QMg1Hj-bmUv"
+       data-callback="onSuccess"
+       data-theme="light"
+       data-size="normal"></div>
+  <div class="done" id="done" style="display:none">Verified! Sending OTP...</div>
+</div>
+<script>
+function onSuccess(token) {
+  document.getElementById('done').style.display = 'block';
+  document.querySelector('.g-recaptcha').style.display = 'none';
+  if (window.RecaptchaChannel) {
+    RecaptchaChannel.postMessage(token);
+  }
+}
+</script>
+</body>
+</html>
+''';
+
   @override
   void initState() {
     super.initState();
@@ -527,7 +581,10 @@ class _RecaptchaWebViewState extends State<_RecaptchaWebView> {
           },
         ),
       )
-      ..loadFlutterAsset('assets/recaptcha.html');
+      ..loadHtmlString(
+        _recaptchaHtml,
+        baseUrl: 'https://local-sathi-eced8.firebaseapp.com',
+      );
   }
 
   @override
