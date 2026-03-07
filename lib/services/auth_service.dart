@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/user_model.dart';
 import '../models/wallet_model.dart';
 import '../config/constants.dart';
@@ -19,6 +20,10 @@ class AuthService {
     required Function(String error) onError,
     required Function(PhoneAuthCredential credential) onAutoVerified,
   }) async {
+    // On Android, force reCAPTCHA fallback in case Play Integrity hasn't propagated yet
+    if (!kIsWeb) {
+      await _auth.setSettings(forceRecaptchaFlow: true);
+    }
     await _auth.verifyPhoneNumber(
       phoneNumber: phoneNumber,
       verificationCompleted: onAutoVerified,
