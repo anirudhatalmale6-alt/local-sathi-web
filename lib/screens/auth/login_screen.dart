@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:sms_autofill/sms_autofill.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../config/theme.dart';
@@ -27,6 +28,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   bool _isLoading = false;
   String? _verificationId;
   bool _usedRestApi = false;
+  String _statusText = '';
+  String _appVersion = '';
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
@@ -45,6 +48,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       CurvedAnimation(parent: _animController, curve: Curves.easeOut),
     );
     _animController.forward();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() => _appVersion = 'v${info.version}+${info.buildNumber}');
+      }
+    } catch (_) {}
   }
 
   @override
@@ -82,6 +95,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
+  void _setStatus(String text) {
+    if (mounted) setState(() => _statusText = text);
+  }
+
   void _sendOTP() async {
     final phone = _phoneController.text.trim();
     if (phone.length < 10) {
@@ -94,6 +111,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     if (kIsWeb) {
       // Web: use SDK directly (built-in reCAPTCHA handles everything)
       setState(() => _isLoading = true);
+      _setStatus('Sending OTP...');
       _usedRestApi = false;
       await _authService.verifyPhoneViaSdk(
         phoneNumber: fullPhone,
@@ -102,15 +120,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         onAutoVerified: _onAutoVerified,
       );
     } else {
-      // Android: skip SDK entirely (Play Integrity is broken).
-      // Go directly to reCAPTCHA + REST API for sending OTP.
+      // Android: use hosted reCAPTCHA WebView + REST API.
+      // The WebView loads from a real HTTPS URL to ensure proper origin
+      // for reCAPTCHA validation (loadHtmlString doesn't set origin correctly).
       _usedRestApi = true;
-      _showRecaptchaAndSendOTP(fullPhone);
+      _showAuthWebView(fullPhone);
     }
   }
 
-  /// Android: show reCAPTCHA verification, then send OTP via REST API
-  void _showRecaptchaAndSendOTP(String fullPhone) {
+  /// Android: show hosted auth WebView that handles reCAPTCHA + sends OTP via REST
+  void _showAuthWebView(String fullPhone) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -128,30 +147,20 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 onPressed: () => Navigator.of(ctx).pop(),
               ),
             ),
-            body: _RecaptchaWebView(
-              onToken: (token) async {
+            body: _AuthWebView(
+              phoneNumber: fullPhone,
+              onSessionInfo: (sessionInfo) {
                 Navigator.of(ctx).pop();
                 if (!mounted) return;
-                setState(() => _isLoading = true);
-                try {
-                  debugPrint('Login: sending OTP via REST API...');
-                  final sessionInfo = await _authService.sendOTPViaRest(
-                    phoneNumber: fullPhone,
-                    recaptchaToken: token,
-                  );
-                  debugPrint('Login: OTP sent, sessionInfo received');
-                  _onCodeSent(sessionInfo);
-                } catch (e) {
-                  debugPrint('Login: REST API sendOTP failed: $e');
-                  if (mounted) {
-                    setState(() => _isLoading = false);
-                    _showError(e.toString());
-                  }
-                }
+                debugPrint('Login: OTP sent, sessionInfo received');
+                _onCodeSent(sessionInfo);
               },
               onError: (String msg) {
                 Navigator.of(ctx).pop();
                 _showError(msg);
+              },
+              onStatus: (String status) {
+                debugPrint('Login WebView: $status');
               },
             ),
           ),
@@ -165,23 +174,29 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       _verificationId = verificationId;
       _otpSent = true;
       _isLoading = false;
+      _statusText = '';
     });
     _startCooldown();
     _startListeningForSms();
   }
 
   void _onSdkError(String error) {
-    setState(() => _isLoading = false);
+    setState(() {
+      _isLoading = false;
+      _statusText = '';
+    });
     _showError(error);
   }
 
   void _onAutoVerified(PhoneAuthCredential credential) async {
     setState(() => _isLoading = true);
+    _setStatus('Auto-verifying...');
     try {
       final userCred = await _authService.signInWithCredential(credential);
       await _handleSignIn(userCred);
     } catch (e) {
       setState(() => _isLoading = false);
+      _setStatus('');
       _showError('Auto verification failed');
     }
   }
@@ -194,26 +209,26 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
 
     setState(() => _isLoading = true);
+    _setStatus('Verifying OTP...');
 
     try {
       UserCredential userCred;
       if (_usedRestApi) {
-        // Android path: verify via SDK signInWithCredential (preferred)
-        // Falls back to REST API internally if SDK fails
         userCred = await _authService.verifyOTPViaRest(
           sessionInfo: _verificationId!,
           otp: otp,
         );
       } else {
-        // Web path: verify via SDK
         userCred = await _authService.signInWithOTP(
           verificationId: _verificationId!,
           otp: otp,
         );
       }
+      _setStatus('Signing in...');
       await _handleSignIn(userCred);
     } catch (e) {
       setState(() => _isLoading = false);
+      _setStatus('');
       _showError(e.toString());
     }
   }
@@ -367,6 +382,16 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ),
                         ],
 
+                        // Status text
+                        if (_statusText.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _statusText,
+                            style: const TextStyle(fontSize: 12, color: AppColors.teal),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+
                         const SizedBox(height: 20),
 
                         SizedBox(
@@ -401,6 +426,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                                     _otpController.clear();
                                     _cooldownTimer?.cancel();
                                     _cooldownSeconds = 0;
+                                    _statusText = '';
                                   });
                                 },
                                 child: const Text('Change number', style: TextStyle(color: AppColors.teal)),
@@ -422,6 +448,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       ],
                     ),
                   ),
+
+                  // Version display
+                  if (_appVersion.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      _appVersion,
+                      style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5)),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -432,197 +467,87 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 }
 
-/// reCAPTCHA WebView: tries invisible mode first, falls back to visible checkbox.
-class _RecaptchaWebView extends StatefulWidget {
-  final Function(String token) onToken;
+/// Auth WebView: loads hosted auth.html from a real HTTPS URL.
+/// The hosted page handles reCAPTCHA verification and sends OTP via REST API.
+/// Returns the sessionInfo (verificationId) to Flutter via JavaScript channel.
+class _AuthWebView extends StatefulWidget {
+  final String phoneNumber;
+  final Function(String sessionInfo) onSessionInfo;
   final Function(String message) onError;
+  final Function(String status) onStatus;
 
-  const _RecaptchaWebView({required this.onToken, required this.onError});
+  const _AuthWebView({
+    required this.phoneNumber,
+    required this.onSessionInfo,
+    required this.onError,
+    required this.onStatus,
+  });
 
   @override
-  State<_RecaptchaWebView> createState() => _RecaptchaWebViewState();
+  State<_AuthWebView> createState() => _AuthWebViewState();
 }
 
-class _RecaptchaWebViewState extends State<_RecaptchaWebView> {
+class _AuthWebViewState extends State<_AuthWebView> {
   late final WebViewController _controller;
   bool _loading = true;
+  bool _resultSent = false;
+  String _currentStatus = 'Loading verification page...';
 
-  // HTML that tries invisible reCAPTCHA first, falls back to visible checkbox
-  static const _recaptchaHtml = '''
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Verify</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    background: #f5f5f5;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  }
-  .loader {
-    text-align: center;
-    padding: 40px 24px;
-  }
-  .spinner {
-    width: 44px; height: 44px;
-    border: 4px solid #e0e0e0;
-    border-top: 4px solid #00897B;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0 auto 20px;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loader h3 { color: #333; font-size: 17px; font-weight: 600; margin-bottom: 6px; }
-  .loader p { color: #999; font-size: 13px; }
-  .checkbox-section {
-    display: none;
-    text-align: center;
-    padding: 40px 24px;
-  }
-  .checkbox-section h3 { color: #333; font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-  .checkbox-section p { color: #777; font-size: 14px; margin-bottom: 28px; }
-  .recaptcha-wrap { display: inline-block; }
-  .done-msg {
-    display: none;
-    text-align: center;
-    padding: 40px 24px;
-  }
-  .done-msg .check {
-    width: 56px; height: 56px;
-    background: #00897B;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 16px;
-    color: white;
-    font-size: 28px;
-  }
-  .done-msg h3 { color: #00897B; font-size: 17px; font-weight: 600; }
-</style>
-<script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
-<script>
-var tokenSent = false;
-var invisibleWidget = null;
-
-function onRecaptchaLoad() {
-  // Try invisible reCAPTCHA first
-  try {
-    invisibleWidget = grecaptcha.render('invisible-box', {
-      sitekey: '6LcMZR0UAAAAALgPMcgHwga7gY5p8QMg1Hj-bmUv',
-      callback: onToken,
-      'error-callback': showVisibleMode,
-      'expired-callback': showVisibleMode,
-      size: 'invisible'
-    });
-    grecaptcha.execute(invisibleWidget);
-  } catch (e) {
-    showVisibleMode();
-  }
-
-  // Timeout: if invisible doesn't resolve in 6 seconds, show visible checkbox
-  setTimeout(function() {
-    if (!tokenSent) showVisibleMode();
-  }, 6000);
-}
-
-function showVisibleMode() {
-  if (tokenSent) return;
-  document.getElementById('loader').style.display = 'none';
-  document.getElementById('checkbox-section').style.display = 'block';
-
-  // Reset invisible widget if it exists
-  try { if (invisibleWidget !== null) grecaptcha.reset(invisibleWidget); } catch(e) {}
-
-  // Render visible checkbox
-  try {
-    grecaptcha.render('visible-box', {
-      sitekey: '6LcMZR0UAAAAALgPMcgHwga7gY5p8QMg1Hj-bmUv',
-      callback: onToken,
-      theme: 'light',
-      size: 'normal'
-    });
-  } catch(e) {
-    // If rendering fails, report error
-    if (window.RecaptchaChannel) {
-      RecaptchaChannel.postMessage('ERROR:Verification setup failed');
-    }
-  }
-}
-
-function onToken(token) {
-  if (tokenSent) return;
-  tokenSent = true;
-  document.getElementById('loader').style.display = 'none';
-  document.getElementById('checkbox-section').style.display = 'none';
-  document.getElementById('done-msg').style.display = 'block';
-  if (window.RecaptchaChannel) {
-    RecaptchaChannel.postMessage(token);
-  }
-}
-</script>
-</head>
-<body>
-  <div id="loader" class="loader">
-    <div class="spinner"></div>
-    <h3>Verifying your identity</h3>
-    <p>This will only take a moment...</p>
-  </div>
-
-  <div id="checkbox-section" class="checkbox-section">
-    <h3>Quick Security Check</h3>
-    <p>Complete the verification below to continue</p>
-    <div class="recaptcha-wrap"><div id="visible-box"></div></div>
-  </div>
-
-  <div id="invisible-box"></div>
-
-  <div id="done-msg" class="done-msg">
-    <div class="check">&check;</div>
-    <h3>Verified! Sending OTP...</h3>
-  </div>
-</body>
-</html>
-''';
+  // Hosted auth page URL - loaded from real HTTPS URL for proper origin/referrer
+  static const _authBaseUrl = 'https://localsathitechnologies.in/auth.html';
+  // Android API key for REST API calls
+  static const _apiKey = 'AIzaSyDNOCIYHqUr-D3qX0Hk5on8dykkvrhB5tY';
 
   @override
   void initState() {
     super.initState();
+
+    final url = '$_authBaseUrl?phone=${Uri.encodeComponent(widget.phoneNumber)}&key=$_apiKey';
+    debugPrint('Auth WebView: loading $url');
+
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..addJavaScriptChannel(
-        'RecaptchaChannel',
+        'FlutterChannel',
         onMessageReceived: (message) {
           final msg = message.message;
-          if (msg.startsWith('ERROR:')) {
+          debugPrint('Auth WebView message: $msg');
+
+          if (_resultSent) return;
+
+          if (msg.startsWith('SESSION:')) {
+            _resultSent = true;
+            widget.onSessionInfo(msg.substring(8));
+          } else if (msg.startsWith('ERROR:')) {
+            _resultSent = true;
             widget.onError(msg.substring(6));
-          } else {
-            widget.onToken(msg);
+          } else if (msg.startsWith('STATUS:')) {
+            if (mounted) {
+              setState(() => _currentStatus = msg.substring(7));
+            }
+            widget.onStatus(msg.substring(7));
+          } else if (msg == 'PAGE_LOADED') {
+            debugPrint('Auth WebView: page loaded successfully');
           }
         },
       )
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (_) {
+            debugPrint('Auth WebView: page finished loading');
             if (mounted) setState(() => _loading = false);
           },
           onWebResourceError: (error) {
-            debugPrint('reCAPTCHA WebView error: ${error.description}');
-            widget.onError('Could not load verification. Please check your internet connection.');
+            debugPrint('Auth WebView error: ${error.description} (${error.errorCode})');
+            // Only report fatal errors (not sub-resource errors)
+            if (error.isForMainFrame == true && !_resultSent) {
+              _resultSent = true;
+              widget.onError('Could not load verification page. Please check your internet connection.');
+            }
           },
         ),
       )
-      ..loadHtmlString(
-        _recaptchaHtml,
-        baseUrl: 'https://local-sathi-eced8.firebaseapp.com',
-      );
+      ..loadRequest(Uri.parse(url));
   }
 
   @override
@@ -633,13 +558,17 @@ function onToken(token) {
         if (_loading)
           Container(
             color: const Color(0xFFF5F5F5),
-            child: const Center(
+            child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(color: AppColors.teal),
-                  SizedBox(height: 16),
-                  Text('Loading verification...', style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                  const CircularProgressIndicator(color: AppColors.teal),
+                  const SizedBox(height: 16),
+                  Text(
+                    _currentStatus,
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 13),
+                    textAlign: TextAlign.center,
+                  ),
                 ],
               ),
             ),
