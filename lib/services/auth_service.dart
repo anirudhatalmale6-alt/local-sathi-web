@@ -56,11 +56,42 @@ class AuthService {
     throw 'Could not send OTP. Please try again.';
   }
 
-  /// Verify OTP via REST API and sign into Firebase
+  /// Verify OTP and sign into Firebase SDK.
+  /// Strategy: try SDK signInWithCredential first (no Play Integrity needed
+  /// for verification step), fall back to REST API if SDK fails.
   Future<UserCredential> verifyOTPViaRest({
     required String sessionInfo,
     required String otp,
   }) async {
+    // Step 1: Try SDK signInWithCredential directly.
+    // signInWithCredential does NOT require Play Integrity —
+    // it only submits the credential to Firebase servers for validation.
+    try {
+      debugPrint('Auth: verifying OTP via SDK signInWithCredential...');
+      final credential = PhoneAuthProvider.credential(
+        verificationId: sessionInfo,
+        smsCode: otp,
+      );
+      final result = await _auth.signInWithCredential(credential);
+      debugPrint('Auth: SDK verification succeeded, uid=${result.user?.uid}');
+      return result;
+    } on FirebaseAuthException catch (e) {
+      debugPrint('Auth: SDK verification failed: ${e.code} - ${e.message}');
+      // Invalid code / expired session → report to user immediately
+      if (e.code == 'invalid-verification-code') {
+        throw 'Invalid OTP. Please check and try again.';
+      }
+      if (e.code == 'session-expired' ||
+          e.code == 'invalid-verification-id') {
+        throw 'OTP expired. Please request a new one.';
+      }
+      // Other SDK errors → try REST API fallback
+    } catch (e) {
+      debugPrint('Auth: SDK verification error: $e');
+    }
+
+    // Step 2: Fall back to REST API verification
+    debugPrint('Auth: falling back to REST API verification...');
     final response = await http.post(
       Uri.parse(
         'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key=$_apiKey',
@@ -73,7 +104,7 @@ class AuthService {
     );
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    debugPrint('signInWithPhoneNumber response: ${response.statusCode}');
+    debugPrint('Auth: REST verification status=${response.statusCode}');
 
     if (data.containsKey('error')) {
       final errMsg = (data['error'] as Map<String, dynamic>)['message'] ?? '';
@@ -84,8 +115,11 @@ class AuthService {
       throw 'Verification failed. Please try again.';
     }
 
-    // REST API succeeded. Now sign into the Firebase SDK.
-    // First try PhoneAuthProvider.credential (works if backend session is compatible)
+    // REST API verified the user. Now sign into the SDK.
+    final localId = data['localId'] as String?;
+    debugPrint('Auth: REST verified, localId=$localId');
+
+    // Try signInWithCredential again — sometimes it works after REST verification
     try {
       final credential = PhoneAuthProvider.credential(
         verificationId: sessionInfo,
@@ -93,25 +127,24 @@ class AuthService {
       );
       return await _auth.signInWithCredential(credential);
     } catch (e) {
-      debugPrint('SDK signInWithCredential failed: $e');
+      debugPrint('Auth: post-REST SDK attempt failed: $e');
     }
 
-    // Fallback: the REST API already authenticated the user.
-    // The idToken proves the user is verified. Reload auth state.
-    // Try reloading to pick up the session.
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Wait briefly for auth state to propagate, then check
+    await Future.delayed(const Duration(milliseconds: 800));
     await _auth.currentUser?.reload();
     if (_auth.currentUser != null) {
-      // User is signed in through REST, create a fake UserCredential
-      // by signing in again with the same credential
-      final credential = PhoneAuthProvider.credential(
-        verificationId: sessionInfo,
-        smsCode: otp,
-      );
-      return await _auth.signInWithCredential(credential);
+      debugPrint('Auth: user found after reload: ${_auth.currentUser!.uid}');
+      try {
+        final credential = PhoneAuthProvider.credential(
+          verificationId: sessionInfo,
+          smsCode: otp,
+        );
+        return await _auth.signInWithCredential(credential);
+      } catch (_) {}
     }
 
-    throw 'Sign in failed. Please try again.';
+    throw 'OTP verified but sign-in failed. Please try again.';
   }
 
   /// SDK-based phone verification (for web or when Play Integrity works)
