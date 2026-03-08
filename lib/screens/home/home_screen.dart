@@ -13,6 +13,9 @@ import '../emergency/emergency_sheet.dart';
 import '../wallet/wallet_screen.dart';
 import '../work_nearby/work_nearby_screen.dart';
 import '../ai_chat/ai_chat_screen.dart';
+import '../quick_help/quick_help_screen.dart';
+import '../jobs/jobs_screen.dart';
+import '../marketplace/marketplace_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -378,6 +381,75 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
 
+          // Section: Features (Quick Help, Jobs, Marketplace)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Features',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.text,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _featureCard(
+                          context,
+                          icon: Icons.flash_on_rounded,
+                          label: 'Quick\nHelp',
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF00897B), Color(0xFF26A69A)],
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const QuickHelpScreen()),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _featureCard(
+                          context,
+                          icon: Icons.work_rounded,
+                          label: 'Job\nBoard',
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const JobsScreen()),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _featureCard(
+                          context,
+                          icon: Icons.storefront_rounded,
+                          label: 'Market\nPlace',
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFE65100), Color(0xFFFF9800)],
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const MarketplaceScreen()),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           // Section: Services
           SliverToBoxAdapter(
             child: Padding(
@@ -613,6 +685,48 @@ class HomeScreen extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _featureCard(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Gradient gradient,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: Colors.white, size: 28),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

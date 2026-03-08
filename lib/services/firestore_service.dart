@@ -8,6 +8,9 @@ import '../models/wallet_model.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import '../models/group_model.dart';
+import '../models/help_request_model.dart';
+import '../models/job_model.dart';
+import '../models/market_item_model.dart';
 import '../config/constants.dart';
 
 class FirestoreService {
@@ -902,5 +905,201 @@ class FirestoreService {
       updates['lastSeen'] = Timestamp.fromDate(DateTime.now());
     }
     await _firestore.collection('users').doc(uid).update(updates);
+  }
+
+  // ══════════════════ QUICK HELP (HELP REQUESTS + BIDDING) ══════════════════
+
+  /// Create a help request
+  Future<void> createHelpRequest(HelpRequestModel request) async {
+    await _firestore.collection('helpRequests').add(request.toFirestore());
+  }
+
+  /// Get open help requests stream (sorted by newest)
+  Stream<List<HelpRequestModel>> getHelpRequests({String? category}) {
+    return _firestore
+        .collection('helpRequests')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) {
+      var items = snap.docs.map((d) => HelpRequestModel.fromFirestore(d)).toList();
+      if (category != null && category.isNotEmpty) {
+        items = items.where((r) => r.category == category).toList();
+      }
+      return items;
+    });
+  }
+
+  /// Get help requests for a specific user
+  Stream<List<HelpRequestModel>> getMyHelpRequests(String uid) {
+    return _firestore
+        .collection('helpRequests')
+        .where('requesterId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => HelpRequestModel.fromFirestore(d)).toList());
+  }
+
+  /// Place a bid on a help request
+  Future<void> placeBid(String requestId, BidModel bid) async {
+    final batch = _firestore.batch();
+    final bidRef = _firestore.collection('helpRequests').doc(requestId).collection('bids').doc();
+    batch.set(bidRef, bid.toFirestore());
+    batch.update(_firestore.collection('helpRequests').doc(requestId), {
+      'bidCount': FieldValue.increment(1),
+    });
+    await batch.commit();
+  }
+
+  /// Get bids for a help request
+  Stream<List<BidModel>> getBids(String requestId) {
+    return _firestore
+        .collection('helpRequests')
+        .doc(requestId)
+        .collection('bids')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => BidModel.fromFirestore(d)).toList());
+  }
+
+  /// Accept a bid
+  Future<void> acceptBid(String requestId, String bidId, String providerId) async {
+    final batch = _firestore.batch();
+    batch.update(_firestore.collection('helpRequests').doc(requestId), {
+      'status': 'inProgress',
+      'acceptedBidId': bidId,
+      'acceptedProviderId': providerId,
+    });
+    batch.update(
+      _firestore.collection('helpRequests').doc(requestId).collection('bids').doc(bidId),
+      {'status': 'accepted'},
+    );
+    await batch.commit();
+  }
+
+  /// Complete a help request
+  Future<void> completeHelpRequest(String requestId) async {
+    await _firestore.collection('helpRequests').doc(requestId).update({
+      'status': 'completed',
+      'completedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  // ══════════════════ LOCAL JOB BOARD ══════════════════
+
+  /// Create a job listing
+  Future<void> createJobListing(JobModel job) async {
+    await _firestore.collection('jobListings').add(job.toFirestore());
+  }
+
+  /// Get job listings stream
+  Stream<List<JobModel>> getJobListings({String? category, String? jobType}) {
+    return _firestore
+        .collection('jobListings')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) {
+      var items = snap.docs.map((d) => JobModel.fromFirestore(d)).toList();
+      if (category != null && category.isNotEmpty) {
+        items = items.where((j) => j.category == category).toList();
+      }
+      if (jobType != null && jobType.isNotEmpty) {
+        items = items.where((j) => j.jobType.name == jobType).toList();
+      }
+      return items;
+    });
+  }
+
+  /// Get jobs posted by a specific user
+  Stream<List<JobModel>> getMyJobListings(String uid) {
+    return _firestore
+        .collection('jobListings')
+        .where('posterId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => JobModel.fromFirestore(d)).toList());
+  }
+
+  /// Apply for a job
+  Future<void> applyForJob(String jobId, JobApplicationModel application) async {
+    final batch = _firestore.batch();
+    final appRef = _firestore.collection('jobListings').doc(jobId).collection('applications').doc();
+    batch.set(appRef, application.toFirestore());
+    batch.update(_firestore.collection('jobListings').doc(jobId), {
+      'applicationCount': FieldValue.increment(1),
+    });
+    await batch.commit();
+  }
+
+  /// Get applications for a job
+  Stream<List<JobApplicationModel>> getJobApplications(String jobId) {
+    return _firestore
+        .collection('jobListings')
+        .doc(jobId)
+        .collection('applications')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => JobApplicationModel.fromFirestore(d)).toList());
+  }
+
+  /// Close a job listing
+  Future<void> closeJobListing(String jobId) async {
+    await _firestore.collection('jobListings').doc(jobId).update({
+      'status': 'closed',
+    });
+  }
+
+  // ══════════════════ LOCAL MARKETPLACE ══════════════════
+
+  /// Create a market item listing
+  Future<void> createMarketItem(MarketItemModel item) async {
+    await _firestore.collection('marketItems').add(item.toFirestore());
+  }
+
+  /// Get market items stream
+  Stream<List<MarketItemModel>> getMarketItems({String? category}) {
+    return _firestore
+        .collection('marketItems')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) {
+      var items = snap.docs.map((d) => MarketItemModel.fromFirestore(d)).toList();
+      // Only show available items
+      items = items.where((i) => i.status == ItemStatus.available).toList();
+      if (category != null && category.isNotEmpty) {
+        items = items.where((i) => i.category == category).toList();
+      }
+      return items;
+    });
+  }
+
+  /// Get my market items
+  Stream<List<MarketItemModel>> getMyMarketItems(String uid) {
+    return _firestore
+        .collection('marketItems')
+        .where('sellerId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => MarketItemModel.fromFirestore(d)).toList());
+  }
+
+  /// Mark item as sold
+  Future<void> markItemSold(String itemId) async {
+    await _firestore.collection('marketItems').doc(itemId).update({
+      'status': 'sold',
+    });
+  }
+
+  /// Delete a market item
+  Future<void> deleteMarketItem(String itemId) async {
+    await _firestore.collection('marketItems').doc(itemId).update({
+      'status': 'removed',
+    });
+  }
+
+  /// Increment item views
+  Future<void> incrementItemViews(String itemId) async {
+    await _firestore.collection('marketItems').doc(itemId).update({
+      'views': FieldValue.increment(1),
+    });
   }
 }
