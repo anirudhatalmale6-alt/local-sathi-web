@@ -1209,6 +1209,64 @@ class FirestoreService {
     });
   }
 
+  /// Edit a message (only sender can edit)
+  Future<void> editMessage(String conversationId, String messageId, String newText) async {
+    await _firestore
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .doc(messageId)
+        .update({
+      'text': newText,
+      'isEdited': true,
+    });
+
+    // Update last message in conversation if this was the latest
+    final convRef = _firestore.collection('conversations').doc(conversationId);
+    final convDoc = await convRef.get();
+    if (convDoc.exists) {
+      final lastMsg = convDoc.data()?['lastMessage'];
+      // We update lastMessage optimistically — if the edited message was the latest
+      final messagesSnap = await _firestore
+          .collection('conversations')
+          .doc(conversationId)
+          .collection('messages')
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+      if (messagesSnap.docs.isNotEmpty && messagesSnap.docs.first.id == messageId) {
+        await convRef.update({'lastMessage': newText});
+      }
+    }
+  }
+
+  /// Delete a message (soft delete — only sender can delete)
+  Future<void> deleteMessage(String conversationId, String messageId) async {
+    await _firestore
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .doc(messageId)
+        .update({
+      'text': 'This message was deleted',
+      'isDeleted': true,
+    });
+
+    // Update last message in conversation if this was the latest
+    final messagesSnap = await _firestore
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .get();
+    if (messagesSnap.docs.isNotEmpty && messagesSnap.docs.first.id == messageId) {
+      await _firestore.collection('conversations').doc(conversationId).update({
+        'lastMessage': 'This message was deleted',
+      });
+    }
+  }
+
   /// Get conversations excluding deleted ones
   Stream<List<ConversationModel>> getConversationsFiltered(String uid) {
     return _firestore

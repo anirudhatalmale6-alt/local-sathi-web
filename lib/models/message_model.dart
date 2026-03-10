@@ -6,6 +6,8 @@ class MessageModel {
   final String text;
   final DateTime createdAt;
   final bool isRead;
+  final bool isEdited;
+  final bool isDeleted;
 
   MessageModel({
     required this.id,
@@ -13,6 +15,8 @@ class MessageModel {
     required this.text,
     required this.createdAt,
     this.isRead = false,
+    this.isEdited = false,
+    this.isDeleted = false,
   });
 
   factory MessageModel.fromFirestore(DocumentSnapshot doc) {
@@ -23,6 +27,8 @@ class MessageModel {
       text: data['text'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isRead: data['isRead'] ?? false,
+      isEdited: data['isEdited'] ?? false,
+      isDeleted: data['isDeleted'] ?? false,
     );
   }
 
@@ -32,6 +38,8 @@ class MessageModel {
       'text': text,
       'createdAt': Timestamp.fromDate(createdAt),
       'isRead': isRead,
+      'isEdited': isEdited,
+      'isDeleted': isDeleted,
     };
   }
 }

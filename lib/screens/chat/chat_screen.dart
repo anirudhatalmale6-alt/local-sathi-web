@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../config/theme.dart';
 import '../../models/message_model.dart';
@@ -327,45 +328,215 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _messageBubble(MessageModel msg, bool isMe) {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        margin: const EdgeInsets.symmetric(vertical: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: isMe ? AppColors.teal : Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMe ? 16 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 16),
+      child: GestureDetector(
+        onLongPress: msg.isDeleted ? null : () => _showMessageOptions(msg, isMe),
+        child: Container(
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: msg.isDeleted
+                ? (isMe ? AppColors.teal.withOpacity(0.5) : Colors.grey.shade100)
+                : (isMe ? AppColors.teal : Colors.white),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: Radius.circular(isMe ? 16 : 4),
+              bottomRight: Radius.circular(isMe ? 4 : 16),
+            ),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 2)),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 4, offset: const Offset(0, 2)),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            Text(
-              msg.text,
-              style: TextStyle(fontSize: 14, color: isMe ? Colors.white : AppColors.text, height: 1.3),
-            ),
-            const SizedBox(height: 3),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          child: Column(
+            crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              if (msg.isDeleted)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.block, size: 14,
+                      color: isMe ? Colors.white60 : AppColors.textMuted),
+                    const SizedBox(width: 4),
+                    Text(
+                      'This message was deleted',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                        color: isMe ? Colors.white60 : AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                )
+              else
                 Text(
-                  _shortTime(msg.createdAt),
-                  style: TextStyle(fontSize: 10, color: isMe ? Colors.white70 : AppColors.textMuted),
+                  msg.text,
+                  style: TextStyle(fontSize: 14, color: isMe ? Colors.white : AppColors.text, height: 1.3),
                 ),
-                if (isMe) ...[
-                  const SizedBox(width: 3),
-                  Icon(Icons.done_all, size: 12, color: msg.isRead ? Colors.white : Colors.white54),
+              const SizedBox(height: 3),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (msg.isEdited && !msg.isDeleted) ...[
+                    Text(
+                      'edited',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontStyle: FontStyle.italic,
+                        color: isMe ? Colors.white60 : AppColors.textMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(
+                    _shortTime(msg.createdAt),
+                    style: TextStyle(fontSize: 10, color: isMe ? Colors.white70 : AppColors.textMuted),
+                  ),
+                  if (isMe) ...[
+                    const SizedBox(width: 3),
+                    Icon(Icons.done_all, size: 12, color: msg.isRead ? Colors.white : Colors.white54),
+                  ],
                 ],
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  void _showMessageOptions(MessageModel msg, bool isMe) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36, height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Copy option (available for everyone)
+              ListTile(
+                leading: const Icon(Icons.copy, color: AppColors.teal),
+                title: const Text('Copy', style: TextStyle(fontSize: 15)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _copyMessage(msg.text);
+                },
+              ),
+              // Edit option (only for sender, within 15 minutes)
+              if (isMe && DateTime.now().difference(msg.createdAt).inMinutes <= 15)
+                ListTile(
+                  leading: const Icon(Icons.edit, color: AppColors.blue),
+                  title: const Text('Edit', style: TextStyle(fontSize: 15)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showEditDialog(msg);
+                  },
+                ),
+              // Delete option (only for sender)
+              if (isMe)
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, color: AppColors.red),
+                  title: const Text('Delete', style: TextStyle(fontSize: 15, color: AppColors.red)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _confirmDeleteMessage(msg);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _copyMessage(String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Message copied'),
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  void _showEditDialog(MessageModel msg) {
+    final editController = TextEditingController(text: msg.text);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Message', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: TextField(
+          controller: editController,
+          maxLines: 5,
+          minLines: 1,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: 'Edit your message...',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newText = editController.text.trim();
+              if (newText.isNotEmpty && newText != msg.text) {
+                Navigator.pop(ctx);
+                await _firestoreService.editMessage(_conversationId, msg.id, newText);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.teal,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteMessage(MessageModel msg) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Message?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: const Text('This message will be deleted for everyone.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _firestoreService.deleteMessage(_conversationId, msg.id);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }
