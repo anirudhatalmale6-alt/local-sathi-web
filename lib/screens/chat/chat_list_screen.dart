@@ -145,7 +145,7 @@ class _ChatsTabState extends State<_ChatsTab> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<ConversationModel>>(
-      stream: widget.firestoreService.getConversations(widget.currentUid),
+      stream: widget.firestoreService.getConversationsFiltered(widget.currentUid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: AppColors.teal));
@@ -184,6 +184,7 @@ class _ChatsTabState extends State<_ChatsTab> {
   Widget _conversationTile(BuildContext context, ConversationModel conv, int unread) {
     final displayName = _getDisplayName(conv);
     final displayPhoto = _getDisplayPhoto(conv);
+    final otherUid = conv.otherUid(widget.currentUid);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -245,7 +246,6 @@ class _ChatsTabState extends State<_ChatsTab> {
         ],
       ),
       onTap: () {
-        final otherUid = conv.otherUid(widget.currentUid);
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => ChatScreen(
             otherUid: otherUid,
@@ -254,6 +254,123 @@ class _ChatsTabState extends State<_ChatsTab> {
           ),
         ));
       },
+      onLongPress: () => _showChatOptions(context, conv, otherUid, displayName),
+    );
+  }
+
+  void _showChatOptions(BuildContext context, ConversationModel conv, String otherUid, String otherName) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE5E7EB),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Text(otherName,
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: AppColors.red),
+                title: const Text('Delete Chat', style: TextStyle(fontSize: 14)),
+                subtitle: const Text('Remove from your chat list', style: TextStyle(fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDeleteChat(conv, otherName);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.block, color: AppColors.orange),
+                title: const Text('Block User', style: TextStyle(fontSize: 14)),
+                subtitle: const Text('They won\'t be able to message you', style: TextStyle(fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmBlockUser(otherUid, otherName);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteChat(ConversationModel conv, String name) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Chat?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Text('Delete your conversation with $name? This cannot be undone.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              await widget.firestoreService.deleteConversation(conv.id, widget.currentUid);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Chat deleted'),
+                    backgroundColor: AppColors.textMuted,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.red, foregroundColor: Colors.white),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmBlockUser(String otherUid, String name) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Block User?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        content: Text('Block $name? They won\'t be able to send you messages.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              await widget.firestoreService.blockUser(widget.currentUid, otherUid);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('$name blocked'),
+                    backgroundColor: AppColors.orange,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.orange, foregroundColor: Colors.white),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
     );
   }
 

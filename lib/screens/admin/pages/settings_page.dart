@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../config/theme.dart';
 import '../../../config/constants.dart';
 import '../../../services/firestore_service.dart';
@@ -23,6 +24,12 @@ class _SettingsPageState extends State<SettingsPage> {
         _sectionTitle('App Update Management'),
         const SizedBox(height: 12),
         _buildUpdateSection(),
+        const SizedBox(height: 24),
+
+        // Sathi AI Configuration
+        _sectionTitle('Sathi AI Configuration'),
+        const SizedBox(height: 12),
+        _buildAiConfigSection(),
         const SizedBox(height: 24),
 
         // Category Management
@@ -212,6 +219,164 @@ class _SettingsPageState extends State<SettingsPage> {
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         ),
         style: const TextStyle(fontSize: 13),
+      ),
+    );
+  }
+
+  // ═══════════════ AI CONFIGURATION ═══════════════
+  Widget _buildAiConfigSection() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('app_config').doc('ai').snapshots(),
+      builder: (context, snap) {
+        final data = snap.data?.data() as Map<String, dynamic>?;
+        final currentKey = data?['geminiApiKey'] as String?;
+        final hasKey = currentKey != null && currentKey.isNotEmpty;
+        final maskedKey = hasKey
+            ? '${currentKey!.substring(0, 10)}...${currentKey.substring(currentKey.length - 4)}'
+            : 'Not configured';
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 12),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: hasKey ? AppColors.green.withAlpha(25) : AppColors.red.withAlpha(25),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      hasKey ? Icons.check_circle : Icons.warning_rounded,
+                      color: hasKey ? AppColors.green : AppColors.red,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hasKey ? 'Gemini API Key Active' : 'Gemini API Key Missing',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: hasKey ? AppColors.green : AppColors.red,
+                          ),
+                        ),
+                        Text(
+                          maskedKey,
+                          style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Get a free API key from Google AI Studio:\naistudio.google.com/apikey',
+                style: TextStyle(fontSize: 11, color: AppColors.textMuted, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _showAiKeyDialog(currentKey),
+                  icon: Icon(hasKey ? Icons.edit : Icons.add, size: 18),
+                  label: Text(hasKey ? 'Update API Key' : 'Add API Key',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7B1FA2),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAiKeyDialog(String? existingKey) {
+    final ctrl = TextEditingController(text: existingKey ?? '');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Gemini API Key',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Paste your Gemini API key here. Get one free from Google AI Studio.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              decoration: InputDecoration(
+                hintText: 'AIzaSy...',
+                filled: true,
+                fillColor: AppColors.bg,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+              style: const TextStyle(fontSize: 13, fontFamily: 'monospace'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final key = ctrl.text.trim();
+              if (key.isEmpty) return;
+              await FirebaseFirestore.instance
+                  .collection('app_config')
+                  .doc('ai')
+                  .set({'geminiApiKey': key}, SetOptions(merge: true));
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('API key saved! Sathi AI is now active.'),
+                    backgroundColor: AppColors.green,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF7B1FA2),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }

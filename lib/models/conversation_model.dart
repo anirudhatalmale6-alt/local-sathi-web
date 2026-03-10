@@ -9,6 +9,7 @@ class ConversationModel {
   final Map<String, int> unreadCounts;
   final Map<String, String> participantNames;
   final Map<String, String?> participantPhotos;
+  final List<String> deletedBy;
 
   ConversationModel({
     required this.id,
@@ -19,6 +20,7 @@ class ConversationModel {
     this.unreadCounts = const {},
     this.participantNames = const {},
     this.participantPhotos = const {},
+    this.deletedBy = const [],
   });
 
   factory ConversationModel.fromFirestore(DocumentSnapshot doc) {
@@ -36,6 +38,7 @@ class ConversationModel {
       ),
       participantNames: Map<String, String>.from(data['participantNames'] ?? {}),
       participantPhotos: Map<String, String?>.from(data['participantPhotos'] ?? {}),
+      deletedBy: List<String>.from(data['deletedBy'] ?? []),
     );
   }
 

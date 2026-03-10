@@ -1161,4 +1161,70 @@ class FirestoreService {
       'views': FieldValue.increment(1),
     });
   }
+
+  // ══════════════════ CHAT PRIVACY (BLOCK & DELETE) ══════════════════
+
+  /// Block a user
+  Future<void> blockUser(String currentUid, String blockedUid) async {
+    await _firestore.collection('blocks').doc(currentUid).set({
+      'blockedUsers': FieldValue.arrayUnion([blockedUid]),
+    }, SetOptions(merge: true));
+  }
+
+  /// Unblock a user
+  Future<void> unblockUser(String currentUid, String blockedUid) async {
+    await _firestore.collection('blocks').doc(currentUid).set({
+      'blockedUsers': FieldValue.arrayRemove([blockedUid]),
+    }, SetOptions(merge: true));
+  }
+
+  /// Check if a user is blocked
+  Future<bool> isUserBlocked(String currentUid, String otherUid) async {
+    final doc = await _firestore.collection('blocks').doc(currentUid).get();
+    if (!doc.exists) return false;
+    final blocked = List<String>.from(doc.data()?['blockedUsers'] ?? []);
+    return blocked.contains(otherUid);
+  }
+
+  /// Get blocked users list
+  Stream<List<String>> getBlockedUsers(String uid) {
+    return _firestore.collection('blocks').doc(uid).snapshots().map((doc) {
+      if (!doc.exists) return <String>[];
+      return List<String>.from(doc.data()?['blockedUsers'] ?? []);
+    });
+  }
+
+  /// Check if either user has blocked the other
+  Future<bool> isBlocked(String uid1, String uid2) async {
+    final b1 = await isUserBlocked(uid1, uid2);
+    if (b1) return true;
+    final b2 = await isUserBlocked(uid2, uid1);
+    return b2;
+  }
+
+  /// Delete a conversation (hide for current user)
+  Future<void> deleteConversation(String conversationId, String uid) async {
+    await _firestore.collection('conversations').doc(conversationId).update({
+      'deletedBy': FieldValue.arrayUnion([uid]),
+    });
+  }
+
+  /// Get conversations excluding deleted ones
+  Stream<List<ConversationModel>> getConversationsFiltered(String uid) {
+    return _firestore
+        .collection('conversations')
+        .where('participants', arrayContains: uid)
+        .snapshots()
+        .map((snap) {
+      final convs = snap.docs
+          .map((d) => ConversationModel.fromFirestore(d))
+          .where((c) {
+            // Hide conversations deleted by this user
+            return !c.deletedBy.contains(uid);
+          })
+          .toList();
+      convs.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+      return convs;
+    });
+  }
 }

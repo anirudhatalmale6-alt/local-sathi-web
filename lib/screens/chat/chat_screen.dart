@@ -31,6 +31,7 @@ class _ChatScreenState extends State<ChatScreen> {
   String _currentName = '';
   String? _currentPhoto;
   bool _sending = false;
+  bool _isBlocked = false;
 
   @override
   void initState() {
@@ -38,8 +39,60 @@ class _ChatScreenState extends State<ChatScreen> {
     _currentUid = FirebaseAuth.instance.currentUser!.uid;
     _conversationId = _firestoreService.getConversationId(_currentUid, widget.otherUid);
     _loadCurrentUserInfo();
+    _checkBlocked();
     // Mark as read
     _firestoreService.markMessagesRead(_conversationId, _currentUid);
+  }
+
+  Future<void> _checkBlocked() async {
+    final blocked = await _firestoreService.isBlocked(_currentUid, widget.otherUid);
+    if (mounted) setState(() => _isBlocked = blocked);
+  }
+
+  Future<void> _toggleBlock() async {
+    if (_isBlocked) {
+      await _firestoreService.unblockUser(_currentUid, widget.otherUid);
+      if (mounted) {
+        setState(() => _isBlocked = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${widget.otherName} unblocked'),
+            backgroundColor: AppColors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Block User?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          content: Text('Block ${widget.otherName}? They won\'t be able to message you.'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.orange, foregroundColor: Colors.white),
+              child: const Text('Block'),
+            ),
+          ],
+        ),
+      );
+      if (confirm == true) {
+        await _firestoreService.blockUser(_currentUid, widget.otherUid);
+        if (mounted) {
+          setState(() => _isBlocked = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${widget.otherName} blocked'),
+              backgroundColor: AppColors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -61,7 +114,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _sending) return;
+    if (text.isEmpty || _sending || _isBlocked) return;
 
     _textController.clear();
     setState(() => _sending = true);
@@ -123,6 +176,28 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'block') _toggleBlock();
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(_isBlocked ? Icons.check_circle : Icons.block,
+                        size: 20, color: _isBlocked ? AppColors.green : AppColors.orange),
+                    const SizedBox(width: 8),
+                    Text(_isBlocked ? 'Unblock' : 'Block User',
+                        style: const TextStyle(fontSize: 14)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -183,50 +258,67 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
 
-          // Input bar
-          Container(
-            padding: EdgeInsets.fromLTRB(12, 8, 12, 8 + MediaQuery.of(context).padding.bottom),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    maxLines: 4,
-                    minLines: 1,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: 'Type a message...',
-                      filled: true,
-                      fillColor: AppColors.bg,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
+          // Input bar or blocked notice
+          if (_isBlocked)
+            Container(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.of(context).padding.bottom),
+              color: AppColors.bg,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.block, size: 16, color: AppColors.textMuted),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'Chat blocked. Unblock to send messages.',
+                    style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+                  ),
+                ],
+              ),
+            )
+          else
+            Container(
+              padding: EdgeInsets.fromLTRB(12, 8, 12, 8 + MediaQuery.of(context).padding.bottom),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _textController,
+                      maxLines: 4,
+                      minLines: 1,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: 'Type a message...',
+                        filled: true,
+                        fillColor: AppColors.bg,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        isDense: true,
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      isDense: true,
+                      onSubmitted: (_) => _sendMessage(),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
                   ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: _sendMessage,
-                  child: Container(
-                    width: 44, height: 44,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppColors.tealBlueGradient,
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _sendMessage,
+                    child: Container(
+                      width: 44, height: 44,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: AppColors.tealBlueGradient,
+                      ),
+                      child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                     ),
-                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
