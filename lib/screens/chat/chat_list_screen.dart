@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/theme.dart';
 import '../../models/conversation_model.dart';
 import '../../models/group_model.dart';
@@ -76,16 +77,75 @@ class _ChatListScreenState extends State<ChatListScreen> with SingleTickerProvid
   }
 }
 
-class _ChatsTab extends StatelessWidget {
+class _ChatsTab extends StatefulWidget {
   final String currentUid;
   final FirestoreService firestoreService;
 
   const _ChatsTab({required this.currentUid, required this.firestoreService});
 
   @override
+  State<_ChatsTab> createState() => _ChatsTabState();
+}
+
+class _ChatsTabState extends State<_ChatsTab> {
+  // Track which conversations we've already enriched to avoid repeated lookups
+  final _enrichedConvIds = <String>{};
+  // Local name cache for conversations with missing names
+  final _nameCache = <String, String>{};
+  final _photoCache = <String, String?>{};
+
+  /// For conversations missing participant names, fetch from users collection
+  /// and update the conversation document (one-time fix per conversation).
+  void _enrichMissingNames(List<ConversationModel> convs) {
+    for (final conv in convs) {
+      if (_enrichedConvIds.contains(conv.id)) continue;
+      final otherUid = conv.otherUid(widget.currentUid);
+      final name = conv.participantNames[otherUid];
+      if (name == null || name.isEmpty || name == 'User') {
+        _enrichedConvIds.add(conv.id);
+        // Fetch the user profile and update the conversation
+        FirebaseFirestore.instance.collection('users').doc(otherUid).get().then((doc) {
+          if (doc.exists) {
+            final userName = doc.data()?['name'] as String? ?? 'User';
+            final userPhoto = doc.data()?['profilePhotoUrl'] as String?;
+            // Update conversation document so future loads have the correct name
+            FirebaseFirestore.instance.collection('conversations').doc(conv.id).update({
+              'participantNames.$otherUid': userName,
+              if (userPhoto != null) 'participantPhotos.$otherUid': userPhoto,
+            });
+            // Also cache locally for immediate display
+            if (mounted) {
+              setState(() {
+                _nameCache[otherUid] = userName;
+                _photoCache[otherUid] = userPhoto;
+              });
+            }
+          }
+        });
+      }
+    }
+  }
+
+  /// Get display name, checking local cache if Firestore data is missing
+  String _getDisplayName(ConversationModel conv) {
+    final name = conv.displayName(widget.currentUid);
+    if (name != 'User') return name;
+    final otherUid = conv.otherUid(widget.currentUid);
+    return _nameCache[otherUid] ?? 'User';
+  }
+
+  /// Get display photo, checking local cache if Firestore data is missing
+  String? _getDisplayPhoto(ConversationModel conv) {
+    final photo = conv.displayPhoto(widget.currentUid);
+    if (photo != null) return photo;
+    final otherUid = conv.otherUid(widget.currentUid);
+    return _photoCache[otherUid];
+  }
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<ConversationModel>>(
-      stream: firestoreService.getConversations(currentUid),
+      stream: widget.firestoreService.getConversations(widget.currentUid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: AppColors.teal));
@@ -105,12 +165,15 @@ class _ChatsTab extends StatelessWidget {
             ),
           );
         }
+        // Enrich any conversations with missing names
+        _enrichMissingNames(convs);
+
         return ListView.builder(
           padding: const EdgeInsets.only(top: 8),
           itemCount: convs.length,
           itemBuilder: (context, index) {
             final conv = convs[index];
-            final unread = conv.unreadFor(currentUid);
+            final unread = conv.unreadFor(widget.currentUid);
             return _conversationTile(context, conv, unread);
           },
         );
@@ -119,18 +182,21 @@ class _ChatsTab extends StatelessWidget {
   }
 
   Widget _conversationTile(BuildContext context, ConversationModel conv, int unread) {
+    final displayName = _getDisplayName(conv);
+    final displayPhoto = _getDisplayPhoto(conv);
+
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: AvatarWidget(
-        photoUrl: conv.displayPhoto(currentUid),
-        name: conv.displayName(currentUid),
+        photoUrl: displayPhoto,
+        name: displayName,
         size: 48,
       ),
       title: Row(
         children: [
           Expanded(
             child: Text(
-              conv.displayName(currentUid),
+              displayName,
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: unread > 0 ? FontWeight.w700 : FontWeight.w500,
@@ -151,7 +217,7 @@ class _ChatsTab extends StatelessWidget {
       ),
       subtitle: Row(
         children: [
-          if (conv.lastSenderUid == currentUid)
+          if (conv.lastSenderUid == widget.currentUid)
             const Padding(
               padding: EdgeInsets.only(right: 4),
               child: Icon(Icons.done_all, size: 14, color: AppColors.teal),
@@ -179,12 +245,12 @@ class _ChatsTab extends StatelessWidget {
         ],
       ),
       onTap: () {
-        final otherUid = conv.otherUid(currentUid);
+        final otherUid = conv.otherUid(widget.currentUid);
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => ChatScreen(
             otherUid: otherUid,
-            otherName: conv.displayName(currentUid),
-            otherPhotoUrl: conv.displayPhoto(currentUid),
+            otherName: displayName,
+            otherPhotoUrl: displayPhoto,
           ),
         ));
       },
