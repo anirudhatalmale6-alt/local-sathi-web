@@ -16,6 +16,7 @@ import '../ai_chat/ai_chat_screen.dart';
 import '../quick_help/quick_help_screen.dart';
 import '../jobs/jobs_screen.dart';
 import '../marketplace/marketplace_screen.dart';
+import '../lost_found/lost_found_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -440,6 +441,21 @@ class HomeScreen extends StatelessWidget {
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(builder: (_) => const MarketplaceScreen()),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _featureCard(
+                          context,
+                          icon: Icons.search_rounded,
+                          label: 'Lost &\nFound',
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF6A4C93), Color(0xFF9D84B7)],
+                          ),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LostFoundScreen()),
                           ),
                         ),
                       ),

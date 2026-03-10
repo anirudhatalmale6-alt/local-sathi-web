@@ -11,6 +11,7 @@ import '../models/group_model.dart';
 import '../models/help_request_model.dart';
 import '../models/job_model.dart';
 import '../models/market_item_model.dart';
+import '../models/lost_found_item_model.dart';
 import '../config/constants.dart';
 
 class FirestoreService {
@@ -1099,6 +1100,64 @@ class FirestoreService {
   /// Increment item views
   Future<void> incrementItemViews(String itemId) async {
     await _firestore.collection('marketItems').doc(itemId).update({
+      'views': FieldValue.increment(1),
+    });
+  }
+
+  // ══════════════════ LOST & FOUND ══════════════════
+
+  /// Create a lost/found item report
+  Future<void> createLostFoundItem(LostFoundItemModel item) async {
+    await _firestore.collection('lostFoundItems').add(item.toFirestore());
+  }
+
+  /// Get lost/found items stream
+  Stream<List<LostFoundItemModel>> getLostFoundItems({String? itemType, String? category}) {
+    return _firestore
+        .collection('lostFoundItems')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) {
+      var items = snap.docs.map((d) => LostFoundItemModel.fromFirestore(d)).toList();
+      // Only show active items
+      items = items.where((i) => i.status == LostFoundStatus.active).toList();
+      if (itemType != null && itemType.isNotEmpty) {
+        items = items.where((i) => i.itemType.name == itemType).toList();
+      }
+      if (category != null && category.isNotEmpty) {
+        items = items.where((i) => i.category == category).toList();
+      }
+      return items;
+    });
+  }
+
+  /// Get user's lost/found items
+  Stream<List<LostFoundItemModel>> getMyLostFoundItems(String uid) {
+    return _firestore
+        .collection('lostFoundItems')
+        .where('userId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => LostFoundItemModel.fromFirestore(d)).toList());
+  }
+
+  /// Mark item as claimed
+  Future<void> claimLostFoundItem(String itemId) async {
+    await _firestore.collection('lostFoundItems').doc(itemId).update({
+      'status': 'claimed',
+    });
+  }
+
+  /// Close a lost/found item report
+  Future<void> closeLostFoundItem(String itemId) async {
+    await _firestore.collection('lostFoundItems').doc(itemId).update({
+      'status': 'closed',
+    });
+  }
+
+  /// Increment lost/found item views
+  Future<void> incrementLostFoundViews(String itemId) async {
+    await _firestore.collection('lostFoundItems').doc(itemId).update({
       'views': FieldValue.increment(1),
     });
   }

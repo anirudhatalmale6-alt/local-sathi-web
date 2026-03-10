@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../config/theme.dart';
-import '../../config/constants.dart';
 import '../../services/ai_service.dart';
-import '../../services/firestore_service.dart';
 import '../search/search_screen.dart';
 
 class AiChatScreen extends StatefulWidget {
@@ -36,21 +34,22 @@ class _AiChatScreenState extends State<AiChatScreen> {
     );
   }
 
-  static const _fallbackKey = 'AIzaSyC-tLH3MDB4yPnerNxS9dwbDco8q1nJu0I';
-
   Future<void> _loadApiKey() async {
     try {
       final doc = await FirebaseFirestore.instance
           .collection('app_config')
           .doc('ai')
           .get();
-      if (doc.exists && doc.data()?['geminiApiKey'] != null) {
-        _geminiApiKey = doc.data()!['geminiApiKey'];
-      } else {
-        _geminiApiKey = _fallbackKey;
+      if (doc.exists) {
+        final key = doc.data()?['geminiApiKey'] as String?;
+        if (key != null && key.isNotEmpty) {
+          _geminiApiKey = key;
+          return;
+        }
       }
+      _geminiApiKey = null;
     } catch (_) {
-      _geminiApiKey = _fallbackKey;
+      _geminiApiKey = null;
     }
   }
 
@@ -99,8 +98,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
     if (_geminiApiKey == null || _geminiApiKey!.isEmpty) {
       setState(() => _isTyping = false);
       _addBotMessage(
-        'AI service is not configured yet. Admin needs to add Gemini API key in Firebase.\n\n'
-        'Go to Firestore > app_config > ai > geminiApiKey',
+        'Sathi AI abhi available nahi hai. Admin ko Gemini API key update karni hogi.\n\n'
+        'Thodi der mein try karo! 🙏',
       );
       return;
     }

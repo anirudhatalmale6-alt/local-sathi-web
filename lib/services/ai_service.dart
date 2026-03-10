@@ -61,8 +61,17 @@ Respond as Sathi AI:''';
       );
     } catch (e) {
       debugPrint('Gemini AI error: $e');
+      final errorMsg = e.toString().toLowerCase();
+      String userMessage;
+      if (errorMsg.contains('api key') || errorMsg.contains('leaked') || errorMsg.contains('invalid')) {
+        userMessage = 'Sathi AI ka API key update hona chahiye. Admin ko inform kar diya hai. Thodi der mein try karo! 🙏';
+      } else if (errorMsg.contains('quota') || errorMsg.contains('rate')) {
+        userMessage = 'Bahut zyada requests ho gayi hain. Thodi der baad try karo! ⏳';
+      } else {
+        userMessage = 'Sathi AI abhi thoda busy hai. Please thodi der baad try karo! 🙏';
+      }
       return AiSuggestion(
-        message: 'AI service temporarily unavailable. Error: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e}',
+        message: userMessage,
         suggestedCategory: null,
       );
     }
