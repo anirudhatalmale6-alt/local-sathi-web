@@ -467,9 +467,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 }
 
-/// Auth WebView: loads hosted auth.html from a real HTTPS URL.
-/// The hosted page handles reCAPTCHA verification and sends OTP via REST API.
-/// Returns the sessionInfo (verificationId) to Flutter via JavaScript channel.
+/// Auth WebView: navigates to Firebase's own domain (authorized for reCAPTCHA),
+/// then injects Firebase Web SDK to handle phone auth.
+/// Firebase Web SDK manages reCAPTCHA internally with correct keys/domain.
+/// Returns the verificationId to Flutter via JavaScript channel.
 class _AuthWebView extends StatefulWidget {
   final String phoneNumber;
   final Function(String sessionInfo) onSessionInfo;
@@ -491,19 +492,11 @@ class _AuthWebViewState extends State<_AuthWebView> {
   late final WebViewController _controller;
   bool _loading = true;
   bool _resultSent = false;
-  String _currentStatus = 'Loading verification page...';
-
-  // Hosted auth page URL - loaded from real HTTPS URL for proper origin/referrer
-  static const _authBaseUrl = 'https://localsathitechnologies.in/auth.html';
-  // Android API key for REST API calls
-  static const _apiKey = 'AIzaSyDNOCIYHqUr-D3qX0Hk5on8dykkvrhB5tY';
+  String _currentStatus = 'Preparing verification...';
 
   @override
   void initState() {
     super.initState();
-
-    final url = '$_authBaseUrl?phone=${Uri.encodeComponent(widget.phoneNumber)}&key=$_apiKey';
-    debugPrint('Auth WebView: loading $url');
 
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -526,28 +519,166 @@ class _AuthWebViewState extends State<_AuthWebView> {
               setState(() => _currentStatus = msg.substring(7));
             }
             widget.onStatus(msg.substring(7));
-          } else if (msg == 'PAGE_LOADED') {
-            debugPrint('Auth WebView: page loaded successfully');
           }
         },
       )
       ..setNavigationDelegate(
         NavigationDelegate(
-          onPageFinished: (_) {
-            debugPrint('Auth WebView: page finished loading');
-            if (mounted) setState(() => _loading = false);
+          onPageFinished: (url) {
+            debugPrint('Auth WebView: page finished: $url');
+            // Page loaded on Firebase domain. Now inject our auth script.
+            _injectAuthScript();
           },
           onWebResourceError: (error) {
             debugPrint('Auth WebView error: ${error.description} (${error.errorCode})');
-            // Only report fatal errors (not sub-resource errors)
             if (error.isForMainFrame == true && !_resultSent) {
               _resultSent = true;
-              widget.onError('Could not load verification page. Please check your internet connection.');
+              widget.onError('Could not load verification. Please check your internet connection.');
             }
           },
         ),
       )
-      ..loadRequest(Uri.parse(url));
+      // Load Firebase's own domain - always in authorized domains list
+      ..loadRequest(Uri.parse('https://local-sathi-eced8.web.app'));
+  }
+
+  void _injectAuthScript() {
+    final phone = widget.phoneNumber.replaceAll("'", "\\'");
+
+    // This script:
+    // 1. Clears the page and sets up UI
+    // 2. Loads Firebase JS SDK (compat mode)
+    // 3. Initializes Firebase with web config
+    // 4. Creates RecaptchaVerifier (visible checkbox)
+    // 5. Calls signInWithPhoneNumber
+    // 6. Returns verificationId via FlutterChannel
+    final script = '''
+(function() {
+  // Clear page and set up UI
+  document.documentElement.innerHTML = '';
+  document.write('<!DOCTYPE html><html><head>' +
+    '<meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">' +
+    '<style>' +
+    '* { margin:0; padding:0; box-sizing:border-box; }' +
+    'body { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; background:#f5f5f5; font-family:-apple-system,BlinkMacSystemFont,sans-serif; padding:20px; }' +
+    '.card { background:white; border-radius:16px; padding:32px 24px; max-width:400px; width:100%; box-shadow:0 2px 12px rgba(0,0,0,0.08); text-align:center; }' +
+    'h3 { color:#333; font-size:17px; font-weight:600; margin-bottom:8px; }' +
+    'p { color:#777; font-size:13px; margin-bottom:20px; }' +
+    '.spinner { width:40px; height:40px; border:4px solid #e0e0e0; border-top:4px solid #00897B; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px; }' +
+    '@keyframes spin { to { transform:rotate(360deg); } }' +
+    '.recaptcha-wrap { display:inline-block; margin-top:12px; }' +
+    '.success { color:#00897B; }' +
+    '.error { color:#E53935; }' +
+    '</style></head><body>' +
+    '<div class="card">' +
+    '<div id="loading"><div class="spinner"></div><h3>Loading security check...</h3><p>Please wait</p></div>' +
+    '<div id="captcha-ui" style="display:none"><h3>Quick Security Check</h3><p>Complete the verification below</p><div class="recaptcha-wrap"><div id="recaptcha-container"></div></div></div>' +
+    '<div id="sending-ui" style="display:none"><div class="spinner"></div><h3>Sending OTP...</h3><p>Please wait</p></div>' +
+    '<div id="done-ui" style="display:none"><h3 class="success">OTP Sent!</h3><p>Returning to app...</p></div>' +
+    '<div id="error-ui" style="display:none"><h3 class="error">Error</h3><p id="error-msg" class="error"></p></div>' +
+    '</div></body></html>');
+  document.close();
+
+  function showPhase(id) {
+    ['loading','captcha-ui','sending-ui','done-ui','error-ui'].forEach(function(p) {
+      var el = document.getElementById(p);
+      if (el) el.style.display = (p === id) ? 'block' : 'none';
+    });
+  }
+
+  function reportError(msg) {
+    showPhase('error-ui');
+    var el = document.getElementById('error-msg');
+    if (el) el.textContent = msg;
+    try { FlutterChannel.postMessage('ERROR:' + msg); } catch(e) {}
+  }
+
+  function loadScript(src) {
+    return new Promise(function(resolve, reject) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = function() { reject(new Error('Failed to load: ' + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  try { FlutterChannel.postMessage('STATUS:Loading Firebase SDK...'); } catch(e) {}
+
+  // Load Firebase JS SDK (compat mode for simpler API)
+  loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js')
+  .then(function() {
+    return loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js');
+  })
+  .then(function() {
+    try { FlutterChannel.postMessage('STATUS:Initializing...'); } catch(e) {}
+
+    // Initialize Firebase with web config
+    if (!firebase.apps.length) {
+      firebase.initializeApp({
+        apiKey: "AIzaSyB8rbRBZodVqfGT3OeiXsIjsB5BOUtKG_4",
+        authDomain: "local-sathi-eced8.firebaseapp.com",
+        projectId: "local-sathi-eced8",
+        appId: "1:342397239071:web:05ecc60d93da1966883a2a"
+      });
+    }
+
+    // Show captcha UI
+    showPhase('captcha-ui');
+
+    // Create RecaptchaVerifier (visible checkbox - most reliable in WebViews)
+    var recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+      size: 'normal',
+      callback: function(token) {
+        showPhase('sending-ui');
+        try { FlutterChannel.postMessage('STATUS:Verified! Sending OTP...'); } catch(e) {}
+      },
+      'expired-callback': function() {
+        try { FlutterChannel.postMessage('STATUS:Verification expired. Please try again.'); } catch(e) {}
+      }
+    });
+
+    // Render the reCAPTCHA first
+    recaptchaVerifier.render().then(function() {
+      try { FlutterChannel.postMessage('STATUS:Complete the security check'); } catch(e) {}
+    });
+
+    // Send OTP using Firebase Web SDK
+    firebase.auth().signInWithPhoneNumber('$phone', recaptchaVerifier)
+    .then(function(confirmationResult) {
+      showPhase('done-ui');
+      // confirmationResult.verificationId is compatible with native SDK
+      try {
+        FlutterChannel.postMessage('SESSION:' + confirmationResult.verificationId);
+      } catch(e) {
+        reportError('Could not communicate with app');
+      }
+    })
+    .catch(function(error) {
+      var msg = error.message || 'Verification failed';
+      if (msg.indexOf('too-many-requests') >= 0) msg = 'Too many attempts. Please wait before trying again.';
+      else if (msg.indexOf('invalid-phone') >= 0) msg = 'Invalid phone number.';
+      else if (msg.indexOf('quota') >= 0) msg = 'SMS quota exceeded. Try later.';
+      reportError(msg);
+    });
+  })
+  .catch(function(err) {
+    reportError('Failed to load verification system: ' + err.message);
+  });
+})();
+''';
+
+    _controller.runJavaScript(script).then((_) {
+      debugPrint('Auth WebView: script injected');
+      if (mounted) setState(() => _loading = false);
+    }).catchError((e) {
+      debugPrint('Auth WebView: script injection failed: $e');
+      if (!_resultSent) {
+        _resultSent = true;
+        widget.onError('Failed to initialize verification');
+      }
+    });
   }
 
   @override
