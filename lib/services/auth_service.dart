@@ -57,17 +57,19 @@ class AuthService {
   }
 
   /// Verify OTP and sign into Firebase SDK.
-  /// Strategy: try SDK signInWithCredential first (no Play Integrity needed
-  /// for verification step), fall back to REST API if SDK fails.
+  /// The sessionInfo comes from REST API sendVerificationCode (via WebView reCAPTCHA).
+  /// Strategy: try SDK signInWithCredential first (sessionInfo from REST API is
+  /// compatible with PhoneAuthProvider.credential), fall back to REST API if needed.
   Future<UserCredential> verifyOTPViaRest({
     required String sessionInfo,
     required String otp,
   }) async {
     // Step 1: Try SDK signInWithCredential directly.
-    // signInWithCredential does NOT require Play Integrity —
-    // it only submits the credential to Firebase servers for validation.
+    // The sessionInfo from REST API sendVerificationCode IS compatible with
+    // PhoneAuthProvider.credential as verificationId.
     try {
       debugPrint('Auth: verifying OTP via SDK signInWithCredential...');
+      debugPrint('Auth: sessionInfo length=${sessionInfo.length}, otp=$otp');
       final credential = PhoneAuthProvider.credential(
         verificationId: sessionInfo,
         smsCode: otp,
@@ -77,15 +79,15 @@ class AuthService {
       return result;
     } on FirebaseAuthException catch (e) {
       debugPrint('Auth: SDK verification failed: ${e.code} - ${e.message}');
-      // Invalid code / expired session → report to user immediately
       if (e.code == 'invalid-verification-code') {
-        throw 'Invalid OTP. Please check and try again.';
+        throw 'Galat OTP. Please check and try again.';
       }
       if (e.code == 'session-expired' ||
           e.code == 'invalid-verification-id') {
         throw 'OTP expired. Please request a new one.';
       }
       // Other SDK errors → try REST API fallback
+      debugPrint('Auth: SDK failed with ${e.code}, trying REST fallback...');
     } catch (e) {
       debugPrint('Auth: SDK verification error: $e');
     }
@@ -105,21 +107,26 @@ class AuthService {
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     debugPrint('Auth: REST verification status=${response.statusCode}');
+    debugPrint('Auth: REST response keys=${data.keys.toList()}');
 
     if (data.containsKey('error')) {
       final errMsg = (data['error'] as Map<String, dynamic>)['message'] ?? '';
-      if (errMsg.toString().contains('INVALID_CODE') ||
-          errMsg.toString().contains('SESSION_EXPIRED')) {
-        throw 'Invalid OTP. Please try again.';
+      debugPrint('Auth: REST error=$errMsg');
+      if (errMsg.toString().contains('INVALID_CODE')) {
+        throw 'Galat OTP. Please check and try again.';
+      }
+      if (errMsg.toString().contains('SESSION_EXPIRED')) {
+        throw 'OTP expired. Please request a new one.';
       }
       throw 'Verification failed. Please try again.';
     }
 
-    // REST API verified the user. Now sign into the SDK.
+    // REST API verified the user. It returns idToken + refreshToken.
+    final idToken = data['idToken'] as String?;
     final localId = data['localId'] as String?;
-    debugPrint('Auth: REST verified, localId=$localId');
+    debugPrint('Auth: REST verified, localId=$localId, hasIdToken=${idToken != null}');
 
-    // Try signInWithCredential again — sometimes it works after REST verification
+    // Now sign into the native SDK using the credential
     try {
       final credential = PhoneAuthProvider.credential(
         verificationId: sessionInfo,
@@ -127,14 +134,28 @@ class AuthService {
       );
       return await _auth.signInWithCredential(credential);
     } catch (e) {
-      debugPrint('Auth: post-REST SDK attempt failed: $e');
+      debugPrint('Auth: post-REST SDK signIn failed: $e');
     }
 
-    // Wait briefly for auth state to propagate, then check
-    await Future.delayed(const Duration(milliseconds: 800));
+    // If SDK signIn still fails, try signInWithCustomToken approach:
+    // Use the idToken from REST to create a session
+    if (idToken != null) {
+      try {
+        // The REST API already authenticated the user.
+        // Try signing in with the idToken via custom token exchange.
+        debugPrint('Auth: trying signInWithCustomToken...');
+        return await _auth.signInWithCustomToken(idToken);
+      } catch (e) {
+        debugPrint('Auth: signInWithCustomToken failed: $e');
+      }
+    }
+
+    // Last resort: wait briefly and check if auth state propagated
+    await Future.delayed(const Duration(milliseconds: 1000));
     await _auth.currentUser?.reload();
     if (_auth.currentUser != null) {
       debugPrint('Auth: user found after reload: ${_auth.currentUser!.uid}');
+      // Return a "fake" UserCredential by signing in again
       try {
         final credential = PhoneAuthProvider.credential(
           verificationId: sessionInfo,

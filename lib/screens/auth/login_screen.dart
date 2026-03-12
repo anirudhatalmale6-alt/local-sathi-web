@@ -468,9 +468,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 }
 
 /// Auth WebView: navigates to Firebase's own domain (authorized for reCAPTCHA),
-/// then injects Firebase Web SDK to handle phone auth.
-/// Firebase Web SDK manages reCAPTCHA internally with correct keys/domain.
-/// Returns the verificationId to Flutter via JavaScript channel.
+/// uses Firebase Web SDK's RecaptchaVerifier for the reCAPTCHA challenge,
+/// then calls the REST API to send verification code.
+/// IMPORTANT: We do NOT use firebase.auth().signInWithPhoneNumber() because
+/// its verificationId is incompatible with the native Flutter SDK.
+/// Instead, we get the reCAPTCHA token and call the REST API directly,
+/// which returns a sessionInfo compatible with PhoneAuthProvider.credential().
 class _AuthWebView extends StatefulWidget {
   final String phoneNumber;
   final Function(String sessionInfo) onSessionInfo;
@@ -526,7 +529,6 @@ class _AuthWebViewState extends State<_AuthWebView> {
         NavigationDelegate(
           onPageFinished: (url) {
             debugPrint('Auth WebView: page finished: $url');
-            // Page loaded on Firebase domain. Now inject our auth script.
             _injectAuthScript();
           },
           onWebResourceError: (error) {
@@ -550,11 +552,11 @@ class _AuthWebViewState extends State<_AuthWebView> {
     // 2. Loads Firebase JS SDK (compat mode)
     // 3. Initializes Firebase with web config
     // 4. Creates RecaptchaVerifier (visible checkbox)
-    // 5. Calls signInWithPhoneNumber
-    // 6. Returns verificationId via FlutterChannel
+    // 5. When reCAPTCHA solved, gets token via callback
+    // 6. Calls REST API sendVerificationCode with the reCAPTCHA token
+    // 7. Returns REST API's sessionInfo to Flutter (compatible with native SDK)
     final script = '''
 (function() {
-  // Clear page and set up UI
   document.documentElement.innerHTML = '';
   document.write('<!DOCTYPE html><html><head>' +
     '<meta charset="utf-8">' +
@@ -580,6 +582,8 @@ class _AuthWebViewState extends State<_AuthWebView> {
     '</div></body></html>');
   document.close();
 
+  var otpSent = false;
+
   function showPhase(id) {
     ['loading','captcha-ui','sending-ui','done-ui','error-ui'].forEach(function(p) {
       var el = document.getElementById(p);
@@ -604,9 +608,41 @@ class _AuthWebViewState extends State<_AuthWebView> {
     });
   }
 
+  // Send OTP via REST API using reCAPTCHA token
+  function sendOTPViaRest(recaptchaToken) {
+    if (otpSent) return;
+    otpSent = true;
+    showPhase('sending-ui');
+    try { FlutterChannel.postMessage('STATUS:Sending OTP...'); } catch(e) {}
+
+    fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=AIzaSyDNOCIYHqUr-D3qX0Hk5on8dykkvrhB5tY', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        phoneNumber: '$phone',
+        recaptchaToken: recaptchaToken
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.sessionInfo) {
+        showPhase('done-ui');
+        try { FlutterChannel.postMessage('SESSION:' + data.sessionInfo); } catch(e) {}
+      } else {
+        var errMsg = (data.error && data.error.message) ? data.error.message : 'Failed to send OTP';
+        if (errMsg.indexOf('TOO_MANY_ATTEMPTS') >= 0) errMsg = 'Too many attempts. Please wait before trying again.';
+        else if (errMsg.indexOf('INVALID_PHONE') >= 0) errMsg = 'Invalid phone number.';
+        else if (errMsg.indexOf('QUOTA_EXCEEDED') >= 0) errMsg = 'SMS quota exceeded. Try later.';
+        reportError(errMsg);
+      }
+    })
+    .catch(function(err) {
+      reportError('Network error: ' + err.message);
+    });
+  }
+
   try { FlutterChannel.postMessage('STATUS:Loading Firebase SDK...'); } catch(e) {}
 
-  // Load Firebase JS SDK (compat mode for simpler API)
   loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js')
   .then(function() {
     return loadScript('https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js');
@@ -614,7 +650,6 @@ class _AuthWebViewState extends State<_AuthWebView> {
   .then(function() {
     try { FlutterChannel.postMessage('STATUS:Initializing...'); } catch(e) {}
 
-    // Initialize Firebase with web config
     if (!firebase.apps.length) {
       firebase.initializeApp({
         apiKey: "AIzaSyB8rbRBZodVqfGT3OeiXsIjsB5BOUtKG_4",
@@ -624,43 +659,27 @@ class _AuthWebViewState extends State<_AuthWebView> {
       });
     }
 
-    // Show captcha UI
     showPhase('captcha-ui');
 
-    // Create RecaptchaVerifier (visible checkbox - most reliable in WebViews)
+    // Create RecaptchaVerifier - ONLY for reCAPTCHA challenge.
+    // We do NOT call signInWithPhoneNumber (its verificationId is
+    // incompatible with the native Flutter SDK).
+    // Instead, we get the reCAPTCHA token and call REST API directly.
     var recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
       size: 'normal',
-      callback: function(token) {
-        showPhase('sending-ui');
-        try { FlutterChannel.postMessage('STATUS:Verified! Sending OTP...'); } catch(e) {}
+      callback: function(recaptchaToken) {
+        // reCAPTCHA solved! Use token to send OTP via REST API.
+        sendOTPViaRest(recaptchaToken);
       },
       'expired-callback': function() {
         try { FlutterChannel.postMessage('STATUS:Verification expired. Please try again.'); } catch(e) {}
       }
     });
 
-    // Render the reCAPTCHA first
     recaptchaVerifier.render().then(function() {
       try { FlutterChannel.postMessage('STATUS:Complete the security check'); } catch(e) {}
-    });
-
-    // Send OTP using Firebase Web SDK
-    firebase.auth().signInWithPhoneNumber('$phone', recaptchaVerifier)
-    .then(function(confirmationResult) {
-      showPhase('done-ui');
-      // confirmationResult.verificationId is compatible with native SDK
-      try {
-        FlutterChannel.postMessage('SESSION:' + confirmationResult.verificationId);
-      } catch(e) {
-        reportError('Could not communicate with app');
-      }
-    })
-    .catch(function(error) {
-      var msg = error.message || 'Verification failed';
-      if (msg.indexOf('too-many-requests') >= 0) msg = 'Too many attempts. Please wait before trying again.';
-      else if (msg.indexOf('invalid-phone') >= 0) msg = 'Invalid phone number.';
-      else if (msg.indexOf('quota') >= 0) msg = 'SMS quota exceeded. Try later.';
-      reportError(msg);
+    }).catch(function(err) {
+      reportError('Could not load reCAPTCHA: ' + err.message);
     });
   })
   .catch(function(err) {
