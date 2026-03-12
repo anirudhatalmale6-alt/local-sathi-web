@@ -615,7 +615,7 @@ class _AuthWebViewState extends State<_AuthWebView> {
     showPhase('sending-ui');
     try { FlutterChannel.postMessage('STATUS:Sending OTP...'); } catch(e) {}
 
-    fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=AIzaSyDNOCIYHqUr-D3qX0Hk5on8dykkvrhB5tY', {
+    fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendVerificationCode?key=AIzaSyB8rbRBZodVqfGT3OeiXsIjsB5BOUtKG_4', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({

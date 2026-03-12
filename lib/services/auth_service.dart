@@ -12,8 +12,8 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Android API key from google-services.json
-  static const _apiKey = 'AIzaSyDNOCIYHqUr-D3qX0Hk5on8dykkvrhB5tY';
+  // Web API key (Android key expired — use web key for all REST API calls)
+  static const _apiKey = 'AIzaSyB8rbRBZodVqfGT3OeiXsIjsB5BOUtKG_4';
 
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
