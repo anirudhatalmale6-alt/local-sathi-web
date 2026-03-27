@@ -108,24 +108,31 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     final fullPhone = phone.startsWith('+') ? phone : '+91$phone';
 
-    if (kIsWeb) {
-      // Web: use SDK directly (built-in reCAPTCHA handles everything)
-      setState(() => _isLoading = true);
-      _setStatus('Sending OTP...');
-      _usedRestApi = false;
-      await _authService.verifyPhoneViaSdk(
-        phoneNumber: fullPhone,
-        onCodeSent: _onCodeSent,
-        onError: _onSdkError,
-        onAutoVerified: _onAutoVerified,
-      );
-    } else {
-      // Android: use hosted reCAPTCHA WebView + REST API.
-      // The WebView loads from a real HTTPS URL to ensure proper origin
-      // for reCAPTCHA validation (loadHtmlString doesn't set origin correctly).
-      _usedRestApi = true;
-      _showAuthWebView(fullPhone);
-    }
+    // Use native Firebase SDK on all platforms.
+    // forceRecaptchaFlow=true makes Android use reCAPTCHA instead of Play Integrity.
+    setState(() => _isLoading = true);
+    _setStatus('Sending OTP...');
+    _usedRestApi = false;
+    await _authService.verifyPhoneViaSdk(
+      phoneNumber: fullPhone,
+      onCodeSent: _onCodeSent,
+      onError: (String error) {
+        debugPrint('SDK auth failed: $error');
+        // If SDK fails on Android, fall back to WebView + REST approach
+        if (!kIsWeb) {
+          debugPrint('Falling back to WebView auth...');
+          setState(() {
+            _isLoading = false;
+            _statusText = '';
+          });
+          _usedRestApi = true;
+          _showAuthWebView(fullPhone);
+        } else {
+          _onSdkError(error);
+        }
+      },
+      onAutoVerified: _onAutoVerified,
+    );
   }
 
   /// Android: show hosted auth WebView that handles reCAPTCHA + sends OTP via REST
