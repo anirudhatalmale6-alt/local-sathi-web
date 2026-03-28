@@ -4,6 +4,7 @@ import '../../config/constants.dart';
 import '../../services/firestore_service.dart';
 import '../../models/user_model.dart';
 import '../../widgets/provider_card.dart';
+import '../../widgets/banner_ad_widget.dart';
 import '../provider_detail/provider_detail_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -171,6 +172,14 @@ class _SearchScreenState extends State<SearchScreen> {
                   }),
                 ],
               ),
+            ),
+          ),
+
+          // Banner Ad
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: BannerAdWidget(),
             ),
           ),
 

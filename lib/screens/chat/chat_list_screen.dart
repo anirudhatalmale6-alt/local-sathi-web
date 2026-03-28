@@ -6,6 +6,7 @@ import '../../models/conversation_model.dart';
 import '../../models/group_model.dart';
 import '../../services/firestore_service.dart';
 import '../../widgets/avatar_widget.dart';
+import '../../widgets/banner_ad_widget.dart';
 import 'chat_screen.dart';
 import 'group_chat_screen.dart';
 import 'create_group_screen.dart';
@@ -168,7 +169,14 @@ class _ChatsTabState extends State<_ChatsTab> {
         // Enrich any conversations with missing names
         _enrichMissingNames(convs);
 
-        return ListView.builder(
+        return Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: BannerAdWidget(),
+            ),
+            Expanded(
+              child: ListView.builder(
           padding: const EdgeInsets.only(top: 8),
           itemCount: convs.length,
           itemBuilder: (context, index) {
@@ -176,6 +184,9 @@ class _ChatsTabState extends State<_ChatsTab> {
             final unread = conv.unreadFor(widget.currentUid);
             return _conversationTile(context, conv, unread);
           },
+        ),
+            ),
+          ],
         );
       },
     );

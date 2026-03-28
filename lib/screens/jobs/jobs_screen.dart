@@ -5,6 +5,7 @@ import '../../config/theme.dart';
 import '../../models/job_model.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../widgets/banner_ad_widget.dart';
 import 'job_detail_screen.dart';
 
 class JobsScreen extends StatefulWidget {
@@ -143,6 +144,14 @@ class _JobsScreenState extends State<JobsScreen> {
                   }).toList(),
                 ),
               ),
+            ),
+          ),
+
+          // Banner Ad
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: BannerAdWidget(),
             ),
           ),
 

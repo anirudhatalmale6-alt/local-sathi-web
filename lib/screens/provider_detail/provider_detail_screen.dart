@@ -8,8 +8,10 @@ import '../../models/user_model.dart';
 import '../../models/review_model.dart';
 import '../../services/firestore_service.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/banner_ad_widget.dart';
 import '../../widgets/avatar_widget.dart';
 import '../chat/chat_screen.dart';
+import '../booking/booking_screen.dart';
 
 class ProviderDetailScreen extends StatelessWidget {
   final UserModel provider;
@@ -244,6 +246,14 @@ class ProviderDetailScreen extends StatelessWidget {
                   ),
                 ),
 
+                // Banner Ad
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
+                    child: BannerAdWidget(),
+                  ),
+                ),
+
                 const SliverToBoxAdapter(child: SizedBox(height: 20)),
               ],
             ),
@@ -299,6 +309,23 @@ class ProviderDetailScreen extends StatelessWidget {
                     label: const Text('WhatsApp', style: TextStyle(fontSize: 13)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF25D366),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => CreateBookingScreen(provider: provider),
+                      ));
+                    },
+                    icon: const Icon(Icons.calendar_month, size: 16),
+                    label: const Text('Book', style: TextStyle(fontSize: 13)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.orange,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),

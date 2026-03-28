@@ -6,6 +6,7 @@ import '../../models/user_model.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../widgets/avatar_widget.dart';
+import '../../widgets/banner_ad_widget.dart';
 import 'user_profile_screen.dart';
 
 class DiscoverScreen extends StatefulWidget {
@@ -144,6 +145,12 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                 );
               }).toList(),
             ),
+          ),
+
+          // Banner Ad
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: BannerAdWidget(),
           ),
 
           // Results

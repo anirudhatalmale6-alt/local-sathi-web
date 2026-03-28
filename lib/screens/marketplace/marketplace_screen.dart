@@ -6,6 +6,7 @@ import '../../config/theme.dart';
 import '../../models/market_item_model.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../widgets/banner_ad_widget.dart';
 import 'market_item_detail_screen.dart';
 
 class MarketplaceScreen extends StatefulWidget {
@@ -123,6 +124,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   }).toList(),
                 ),
               ),
+            ),
+          ),
+
+          // Banner Ad
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: BannerAdWidget(),
             ),
           ),
 

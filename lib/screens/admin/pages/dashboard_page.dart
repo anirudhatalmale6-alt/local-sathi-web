@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../config/theme.dart';
 import '../../../services/firestore_service.dart';
 
@@ -116,6 +117,12 @@ class _DashboardPageState extends State<DashboardPage> {
           _sectionTitle('Geographic Distribution'),
           const SizedBox(height: 12),
           _buildGeoSection(),
+          const SizedBox(height: 24),
+
+          // Commission & Bookings
+          _sectionTitle('Bookings & Revenue'),
+          const SizedBox(height: 12),
+          _buildBookingStats(),
           const SizedBox(height: 24),
 
           // Live community stats
@@ -277,6 +284,82 @@ class _DashboardPageState extends State<DashboardPage> {
             }).toList(),
           );
         }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildBookingStats() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('bookings').snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+        int total = docs.length;
+        int completed = 0;
+        int pending = 0;
+        double totalRevenue = 0;
+        double totalCommission = 0;
+
+        for (final doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final status = data['status'] ?? '';
+          if (status == 'completed') {
+            completed++;
+            totalRevenue += (data['agreedPrice'] as num?)?.toDouble() ?? 0;
+            totalCommission += (data['commissionAmount'] as num?)?.toDouble() ?? 0;
+          } else if (status == 'pending') {
+            pending++;
+          }
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _miniStat('Total', '$total', AppColors.blue),
+                  _miniStat('Pending', '$pending', AppColors.orange),
+                  _miniStat('Done', '$completed', AppColors.green),
+                ],
+              ),
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Column(
+                    children: [
+                      Text('\u20B9${totalRevenue.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.teal)),
+                      Text('Total Revenue', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                    ],
+                  ),
+                  Column(
+                    children: [
+                      Text('\u20B9${totalCommission.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.orange)),
+                      Text('Commission Earned', style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _miniStat(String label, String value, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: color)),
+          Text(label, style: TextStyle(fontSize: 11, color: AppColors.textMuted)),
+        ],
       ),
     );
   }

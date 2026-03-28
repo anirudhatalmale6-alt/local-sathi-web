@@ -16,6 +16,7 @@ import '../auth/login_screen.dart';
 import '../wallet/wallet_screen.dart';
 import '../social/follow_list_screen.dart';
 import '../subscription/subscription_screen.dart';
+import '../booking/bookings_list_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -504,6 +505,21 @@ class ProfileScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.calendar_month, color: AppColors.teal),
+              title: const Text('My Bookings'),
+              subtitle: Text(
+                'View your service bookings',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BookingsListScreen()),
                 );
               },
             ),

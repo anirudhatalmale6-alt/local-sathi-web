@@ -4,6 +4,7 @@ import '../../config/theme.dart';
 import '../../models/lost_found_item_model.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../widgets/banner_ad_widget.dart';
 import 'lost_found_detail_screen.dart';
 
 class LostFoundScreen extends StatefulWidget {
@@ -179,6 +180,14 @@ class _LostFoundScreenState extends State<LostFoundScreen>
                   }).toList(),
                 ),
               ),
+            ),
+          ),
+
+          // Banner Ad
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: BannerAdWidget(),
             ),
           ),
 
