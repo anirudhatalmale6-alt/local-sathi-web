@@ -25,6 +25,7 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
   TimeOfDay _scheduledTime = const TimeOfDay(hour: 10, minute: 0);
   String? _selectedCategory;
   bool _submitting = false;
+  bool _isFirstBooking = false;
 
   @override
   void initState() {
@@ -32,6 +33,18 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
     if (widget.provider.serviceCategories.isNotEmpty) {
       _selectedCategory = widget.provider.serviceCategories.first;
     }
+    _checkFirstBooking();
+  }
+
+  Future<void> _checkFirstBooking() async {
+    final uid = context.read<AppProvider>().currentUser?.uid;
+    if (uid == null) return;
+    final snap = await FirebaseFirestore.instance
+        .collection('bookings')
+        .where('customerUid', isEqualTo: uid)
+        .limit(1)
+        .get();
+    if (mounted) setState(() => _isFirstBooking = snap.docs.isEmpty);
   }
 
   @override
@@ -54,8 +67,12 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
     setState(() => _submitting = true);
 
     final price = double.tryParse(_priceController.text.trim());
-    final commissionRate = price != null ? AppConstants.getCommissionRate(price) : 0.0;
-    final commission = price != null ? AppConstants.calculateCommission(price) : 0.0;
+    final commissionRate = price != null
+        ? (_isFirstBooking ? 0.0 : AppConstants.getCommissionRate(price))
+        : 0.0;
+    final commission = price != null
+        ? AppConstants.calculateCommission(price, isFirstBooking: _isFirstBooking)
+        : 0.0;
 
     final scheduled = DateTime(
       _scheduledDate.year,
@@ -171,8 +188,8 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
   Widget build(BuildContext context) {
     final provider = widget.provider;
     final price = double.tryParse(_priceController.text.trim());
-    final commission = price != null ? AppConstants.calculateCommission(price) : 0.0;
-    final rate = price != null ? AppConstants.getCommissionRate(price) : 0.0;
+    final commission = price != null ? AppConstants.calculateCommission(price, isFirstBooking: _isFirstBooking) : 0.0;
+    final rate = price != null ? (_isFirstBooking ? 0.0 : AppConstants.getCommissionRate(price)) : 0.0;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -274,17 +291,19 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.orangeLight,
+                  color: _isFirstBooking ? AppColors.green.withOpacity(0.1) : AppColors.orangeLight,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, size: 16, color: AppColors.orange),
+                    Icon(Icons.info_outline, size: 16, color: _isFirstBooking ? AppColors.green : AppColors.orange),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Platform fee: \u20B9${commission.toStringAsFixed(0)} (${rate.toStringAsFixed(0)}%) | You pay: \u20B9${price.toStringAsFixed(0)}',
-                        style: const TextStyle(fontSize: 12, color: AppColors.orange),
+                        _isFirstBooking
+                            ? 'First booking - 0% commission! You pay: \u20B9${price.toStringAsFixed(0)}'
+                            : 'Platform fee: \u20B9${commission.toStringAsFixed(0)} (${rate.toStringAsFixed(0)}%) | You pay: \u20B9${price.toStringAsFixed(0)}',
+                        style: TextStyle(fontSize: 12, color: _isFirstBooking ? AppColors.green : AppColors.orange),
                       ),
                     ),
                   ],

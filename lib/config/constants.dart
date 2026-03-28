@@ -52,23 +52,30 @@ class AppConstants {
     [99999999, 5], // 5000+: 5%
   ];
 
+  /// Provider Pro subscribers get this % discount on commission
+  static const int proCommissionDiscount = 2;
+
   /// Calculate commission based on tiered slabs
-  static double calculateCommission(double price) {
-    for (final slab in commissionSlabs) {
-      if (price <= slab[0]) {
-        return price * slab[1] / 100;
-      }
-    }
-    return price * 5 / 100; // fallback 5%
+  /// [isProProvider] - if true, reduces rate by proCommissionDiscount
+  /// [isFirstBooking] - if true, returns 0 (growth hack)
+  static double calculateCommission(double price, {bool isProProvider = false, bool isFirstBooking = false}) {
+    if (isFirstBooking) return 0;
+    final rate = getCommissionRate(price, isProProvider: isProProvider);
+    return price * rate / 100;
   }
 
   /// Get commission rate for a given price
-  static double getCommissionRate(double price) {
+  static double getCommissionRate(double price, {bool isProProvider = false}) {
+    double rate = 5.0;
     for (final slab in commissionSlabs) {
       if (price <= slab[0]) {
-        return slab[1].toDouble();
+        rate = slab[1].toDouble();
+        break;
       }
     }
-    return 5.0;
+    if (isProProvider) {
+      rate = (rate - proCommissionDiscount).clamp(1, 100);
+    }
+    return rate;
   }
 }

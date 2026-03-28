@@ -563,12 +563,15 @@ class _SettingsPageState extends State<SettingsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Commission Slabs', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+          const SizedBox(height: 4),
+          Text('Dynamic rates based on booking value', style: TextStyle(fontSize: 12, color: AppColors.textMuted)),
           const SizedBox(height: 8),
           Table(
             border: TableBorder.all(color: AppColors.bg, width: 1),
             columnWidths: const {
               0: FlexColumnWidth(2),
               1: FlexColumnWidth(1),
+              2: FlexColumnWidth(1),
             },
             children: [
               TableRow(
@@ -576,11 +579,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 children: const [
                   Padding(padding: EdgeInsets.all(10), child: Text('Booking Value', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
                   Padding(padding: EdgeInsets.all(10), child: Text('Rate', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+                  Padding(padding: EdgeInsets.all(10), child: Text('Pro Rate', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
                 ],
               ),
               ...AppConstants.commissionSlabs.map((slab) {
                 final maxVal = slab[0].toInt();
                 final rate = slab[1].toInt();
+                final proRate = (rate - AppConstants.proCommissionDiscount).toInt();
                 final label = maxVal >= 99999999
                     ? '\u20B95,000+'
                     : maxVal <= 499
@@ -589,7 +594,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 return TableRow(
                   children: [
                     Padding(padding: const EdgeInsets.all(10), child: Text(label, style: const TextStyle(fontSize: 13))),
-                    Padding(padding: const EdgeInsets.all(10), child: Text('$rate%', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.teal))),
+                    Padding(padding: const EdgeInsets.all(10), child: Text('$rate%', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
+                    Padding(padding: const EdgeInsets.all(10), child: Text('$proRate%', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.teal))),
                   ],
                 );
               }),
@@ -597,8 +603,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Slabs are configured in app code (constants.dart)',
-            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+            'Pro Rate applies to Provider Pro (\u20B9199/mo) subscribers. First booking = 0% commission.',
+            style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontStyle: FontStyle.italic),
           ),
         ],
       ),

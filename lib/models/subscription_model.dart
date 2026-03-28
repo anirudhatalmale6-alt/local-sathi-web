@@ -63,7 +63,8 @@ class SubscriptionModel {
           'name': 'Free',
           'price': 0,
           'priceLabel': 'Free',
-          'features': ['Basic access', 'Ads supported', 'Limited features'],
+          'features': ['Basic access', 'Ads supported', 'Standard search ranking'],
+          'tag': null,
           'color': 0xFF9E9E9E,
         };
       case SubscriptionPlan.basic:
@@ -71,8 +72,13 @@ class SubscriptionModel {
           'name': 'Basic',
           'price': 49,
           'priceLabel': '49/month',
-          'features': ['No ads', 'Priority support', 'All features'],
-          'color': 0xFF1565C0,
+          'features': [
+            'No ads',
+            'Faster app experience',
+            'Priority support (basic)',
+          ],
+          'tag': null,
+          'color': 0xFF43A047,
         };
       case SubscriptionPlan.premium:
         return {
@@ -81,12 +87,13 @@ class SubscriptionModel {
           'priceLabel': '99/month',
           'features': [
             'No ads',
-            'Priority support',
-            'All features',
-            'Featured profile',
-            'Verified badge priority',
+            'Verified badge',
+            'Slight boost in search ranking',
+            'Priority listing in category',
+            'Faster response visibility',
           ],
-          'color': 0xFFFF8F00,
+          'tag': null,
+          'color': 0xFF1565C0,
         };
       case SubscriptionPlan.providerPremium:
         return {
@@ -94,13 +101,14 @@ class SubscriptionModel {
           'price': 199,
           'priceLabel': '199/month',
           'features': [
-            'No ads',
-            'Featured listing',
-            'Top search results',
-            'Priority booking',
-            'Analytics dashboard',
-            'Verified badge priority',
+            'Everything in Premium +',
+            'Top search placement',
+            'Featured listing badge',
+            'Reduced commission (-2%)',
+            'Basic analytics (views, bookings)',
+            'Lead priority (shown first)',
           ],
+          'tag': 'Most Popular',
           'color': 0xFF00897B,
         };
     }

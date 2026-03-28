@@ -254,115 +254,149 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final isCurrent = _currentSub?.plan == plan && _currentSub?.isActiveNow == true;
     final color = Color(info['color'] as int);
     final features = info['features'] as List<String>;
+    final tag = info['tag'] as String?;
+    final isHighlighted = tag != null;
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: isCurrent ? Border.all(color: color, width: 2) : null,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  plan == SubscriptionPlan.free
-                      ? Icons.person_outline
-                      : plan == SubscriptionPlan.providerPremium
-                          ? Icons.handyman
-                          : Icons.diamond,
-                  color: color,
-                  size: 22,
-                ),
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: EdgeInsets.all(isHighlighted ? 22 : 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isCurrent ? color : (isHighlighted ? color : Colors.transparent),
+              width: isHighlighted ? 2 : (isCurrent ? 2 : 0),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: isHighlighted ? color.withOpacity(0.12) : Colors.black.withOpacity(0.04),
+                blurRadius: isHighlighted ? 16 : 12,
+                offset: const Offset(0, 4),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      info['name'] as String,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.text,
-                      ),
-                    ),
-                    Text(
-                      info['price'] == 0 ? 'Free forever' : '\u20B9${info['priceLabel']}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: color,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (isCurrent)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text(
-                    'Current',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      plan == SubscriptionPlan.free
+                          ? Icons.person_outline
+                          : plan == SubscriptionPlan.providerPremium
+                              ? Icons.rocket_launch
+                              : plan == SubscriptionPlan.premium
+                                  ? Icons.diamond
+                                  : Icons.star_outline,
+                      color: color,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          info['name'] as String,
+                          style: TextStyle(
+                            fontSize: isHighlighted ? 20 : 18,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.text,
+                          ),
+                        ),
+                        Text(
+                          info['price'] == 0 ? 'Free forever' : '\u20B9${info['priceLabel']}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isCurrent)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Current',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
 
-          // Features
-          ...features.map((f) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: color, size: 16),
-                    const SizedBox(width: 8),
-                    Text(f, style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                  ],
-                ),
-              )),
+              // Features
+              ...features.map((f) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: color, size: 16),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(f, style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                        ),
+                      ],
+                    ),
+                  )),
 
-          if (plan != SubscriptionPlan.free && !isCurrent) ...[
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _subscribe(plan),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: color,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              if (plan != SubscriptionPlan.free && !isCurrent) ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => _subscribe(plan),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: color,
+                      padding: EdgeInsets.symmetric(vertical: isHighlighted ? 16 : 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(
+                      isHighlighted ? 'Get Provider Pro' : 'Subscribe',
+                      style: TextStyle(fontSize: isHighlighted ? 16 : 15, fontWeight: FontWeight.w600),
+                    ),
+                  ),
                 ),
-                child: Text(
-                  'Subscribe',
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                ),
+              ],
+            ],
+          ),
+        ),
+        // "Most Popular" tag
+        if (isHighlighted)
+          Positioned(
+            top: -10,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: color.withOpacity(0.3), blurRadius: 6, offset: const Offset(0, 2)),
+                ],
+              ),
+              child: Text(
+                tag,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
               ),
             ),
-          ],
-        ],
-      ),
+          ),
+      ],
     );
   }
 }
