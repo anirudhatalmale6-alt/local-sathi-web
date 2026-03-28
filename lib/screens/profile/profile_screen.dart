@@ -15,6 +15,7 @@ import '../admin/admin_panel.dart';
 import '../auth/login_screen.dart';
 import '../wallet/wallet_screen.dart';
 import '../social/follow_list_screen.dart';
+import '../subscription/subscription_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -491,6 +492,21 @@ class ProfileScreen extends StatelessWidget {
                   _showAadhaarUploadDialog(context);
                 },
               ),
+            ListTile(
+              leading: const Icon(Icons.diamond, color: AppColors.orange),
+              title: const Text('Subscription Plans'),
+              subtitle: Text(
+                'Go ad-free & unlock premium features',
+                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+                );
+              },
+            ),
             ListTile(
               leading: Icon(Icons.stars_rounded, color: AppColors.orange),
               title: const Text('Sathi Wallet'),

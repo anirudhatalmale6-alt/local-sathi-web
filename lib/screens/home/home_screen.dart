@@ -4,9 +4,11 @@ import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../providers/app_provider.dart';
 import '../../services/firestore_service.dart';
+import '../../services/ad_service.dart';
 import '../../models/user_model.dart';
 import '../../widgets/provider_card.dart';
 import '../../widgets/feedback_bar.dart';
+import '../../widgets/banner_ad_widget.dart';
 import '../notifications/notifications_screen.dart';
 import '../provider_detail/provider_detail_screen.dart';
 import '../emergency/emergency_sheet.dart';
@@ -17,6 +19,7 @@ import '../quick_help/quick_help_screen.dart';
 import '../jobs/jobs_screen.dart';
 import '../marketplace/marketplace_screen.dart';
 import '../lost_found/lost_found_screen.dart';
+import '../subscription/subscription_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -202,6 +205,14 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
 
+          // Banner Ad
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: BannerAdWidget(),
+            ),
+          ),
+
           // Quick Actions Row (SOS + Wallet + Work Near Me)
           SliverToBoxAdapter(
             child: Padding(
@@ -335,6 +346,50 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 10),
+
+                  // Premium / Subscribe
+                  if (!AdService().isPremium)
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF6F00), Color(0xFFFFCA28)],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFF6F00).withAlpha(60),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.diamond, color: Colors.white, size: 20),
+                              SizedBox(width: 4),
+                              Text(
+                                'PRO',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (!AdService().isPremium)
+                    const SizedBox(width: 10),
 
                   // Work Near Me (for providers)
                   if (appProvider.currentUser?.isProvider == true)
@@ -560,6 +615,14 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
 
+          // Banner Ad (between sections)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: BannerAdWidget(),
+            ),
+          ),
+
           // Section: Featured Providers
           SliverToBoxAdapter(
             child: Padding(
@@ -613,6 +676,7 @@ class HomeScreen extends StatelessWidget {
                         provider: providers[index],
                         isFeatured: true,
                         onTap: () {
+                          AdService().onUserAction();
                           Navigator.push(
                             context,
                             MaterialPageRoute(

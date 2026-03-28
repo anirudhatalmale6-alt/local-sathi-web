@@ -10,6 +10,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/home/main_shell.dart';
 import 'services/auth_service.dart';
 import 'services/update_service.dart';
+import 'services/ad_service.dart';
 import 'widgets/update_dialog.dart';
 
 void main() async {
@@ -28,6 +29,9 @@ void main() async {
     // Firebase init failed - app will still launch
     debugPrint('Firebase init error: $e');
   }
+
+  // Initialize AdMob (non-blocking)
+  AdService().initialize();
 
   runApp(const LocalSathiApp());
 }

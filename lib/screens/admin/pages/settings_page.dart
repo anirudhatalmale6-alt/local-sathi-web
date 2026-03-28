@@ -38,6 +38,12 @@ class _SettingsPageState extends State<SettingsPage> {
         _buildCategorySection(),
         const SizedBox(height: 24),
 
+        // Monetisation Settings
+        _sectionTitle('Monetisation'),
+        const SizedBox(height: 12),
+        _buildMonetisationSection(),
+        const SizedBox(height: 24),
+
         // App Info
         _sectionTitle('App Information'),
         const SizedBox(height: 12),
@@ -486,6 +492,160 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
         ],
+      ),
+    );
+  }
+
+  // ═══════════════ MONETISATION ═══════════════
+  Widget _buildMonetisationSection() {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('app_config')
+          .doc('monetisation')
+          .snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+        final commissionRate = (data['commissionRate'] as num?)?.toDouble() ?? 10.0;
+        final adsEnabled = data['adsEnabled'] ?? true;
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Ads Toggle
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Enable Ads', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('Show Google AdMob ads to free users'),
+                value: adsEnabled,
+                activeColor: AppColors.teal,
+                onChanged: (val) {
+                  FirebaseFirestore.instance
+                      .collection('app_config')
+                      .doc('monetisation')
+                      .set({'adsEnabled': val}, SetOptions(merge: true));
+                },
+              ),
+              const Divider(),
+              // Commission Rate
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Commission Rate', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text('${commissionRate.toStringAsFixed(1)}% on each booking'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.edit, color: AppColors.teal),
+                  onPressed: () => _editCommissionRate(commissionRate),
+                ),
+              ),
+              const Divider(),
+              // Subscription Management
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Active Subscriptions', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: const Text('View and manage user subscriptions'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () => _showSubscriptionManager(),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _editCommissionRate(double current) {
+    final controller = TextEditingController(text: current.toStringAsFixed(1));
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Commission Rate'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Rate (%)',
+            suffixText: '%',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              final rate = double.tryParse(controller.text);
+              if (rate != null && rate >= 0 && rate <= 100) {
+                FirebaseFirestore.instance
+                    .collection('app_config')
+                    .doc('monetisation')
+                    .set({'commissionRate': rate}, SetOptions(merge: true));
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSubscriptionManager() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(ctx).size.height * 0.7,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.textMuted.withOpacity(0.3), borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            const Text('Active Subscriptions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('subscriptions')
+                    .where('isActive', isEqualTo: true)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text('No active subscriptions'));
+                  }
+                  final docs = snapshot.data!.docs;
+                  return ListView.builder(
+                    itemCount: docs.length,
+                    itemBuilder: (context, index) {
+                      final data = docs[index].data() as Map<String, dynamic>;
+                      final plan = data['plan'] ?? 'unknown';
+                      final expiry = (data['expiresAt'] as Timestamp?)?.toDate();
+                      return ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppColors.teal.withOpacity(0.1),
+                          child: const Icon(Icons.person, color: AppColors.teal),
+                        ),
+                        title: Text(docs[index].id, style: const TextStyle(fontSize: 13)),
+                        subtitle: Text('Plan: $plan'),
+                        trailing: Text(
+                          expiry != null ? 'Expires: ${expiry.day}/${expiry.month}/${expiry.year}' : '',
+                          style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
