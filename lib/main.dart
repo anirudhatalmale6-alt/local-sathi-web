@@ -52,32 +52,86 @@ class LocalSathiApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         builder: (context, child) {
-          // Constrain width on web to look like a mobile app
-          if (kIsWeb && MediaQuery.of(context).size.width > 600) {
+          if (kIsWeb) {
+            final width = MediaQuery.of(context).size.width;
             final screenHeight = MediaQuery.of(context).size.height;
-            return Container(
-              color: const Color(0xFFE0E0E0),
-              child: Center(
-                child: Container(
-                  width: 420,
-                  decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(40),
-                        blurRadius: 24,
+            // Mobile: full width. Tablet (600-1024): centered 540px. Desktop (1024+): centered 480px with side branding.
+            if (width > 1024) {
+              return Container(
+                color: const Color(0xFFF0F4F3),
+                child: Row(
+                  children: [
+                    // Left branding panel
+                    Expanded(
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFF0097A7), Color(0xFF00BCD4)],
+                          ),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withOpacity(0.15),
+                                ),
+                                child: const Icon(Icons.location_on, size: 40, color: Colors.white),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text('LOCAL SATHI',
+                                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 2, decoration: TextDecoration.none),
+                              ),
+                              const SizedBox(height: 6),
+                              Text('your community companion',
+                                style: TextStyle(fontSize: 14, color: Colors.white.withOpacity(0.7), letterSpacing: 1.5, decoration: TextDecoration.none, fontWeight: FontWeight.w400),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ],
-                  ),
-                  clipBehavior: Clip.hardEdge,
-                  child: MediaQuery(
-                    data: MediaQuery.of(context).copyWith(
-                      size: Size(420, screenHeight),
                     ),
-                    child: child!,
+                    // App content in phone-like frame
+                    Container(
+                      width: 480,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        boxShadow: [BoxShadow(color: Colors.black.withAlpha(25), blurRadius: 32)],
+                      ),
+                      clipBehavior: Clip.hardEdge,
+                      child: MediaQuery(
+                        data: MediaQuery.of(context).copyWith(size: Size(480, screenHeight)),
+                        child: child!,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else if (width > 600) {
+              // Tablet: centered with shadow
+              return Container(
+                color: const Color(0xFFF0F4F3),
+                child: Center(
+                  child: Container(
+                    width: 540,
+                    decoration: BoxDecoration(
+                      boxShadow: [BoxShadow(color: Colors.black.withAlpha(30), blurRadius: 24)],
+                    ),
+                    clipBehavior: Clip.hardEdge,
+                    child: MediaQuery(
+                      data: MediaQuery.of(context).copyWith(size: Size(540, screenHeight)),
+                      child: child!,
+                    ),
                   ),
                 ),
-              ),
-            );
+              );
+            }
           }
           return child!;
         },
