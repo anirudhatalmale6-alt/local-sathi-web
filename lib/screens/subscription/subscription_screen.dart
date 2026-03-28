@@ -5,6 +5,7 @@ import '../../config/theme.dart';
 import '../../models/subscription_model.dart';
 import '../../providers/app_provider.dart';
 import '../../services/ad_service.dart';
+import '../../services/payment_service.dart';
 
 class SubscriptionScreen extends StatefulWidget {
   const SubscriptionScreen({super.key});
@@ -43,57 +44,92 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 
   Future<void> _subscribe(SubscriptionPlan plan) async {
-    final uid = context.read<AppProvider>().currentUser?.uid;
-    if (uid == null) return;
+    final user = context.read<AppProvider>().currentUser;
+    if (user == null) return;
 
-    // For now, activate subscription directly (payment gateway to be integrated later)
-    final now = DateTime.now();
-    final sub = SubscriptionModel(
-      uid: uid,
-      plan: plan,
-      isActive: true,
-      startedAt: now,
-      expiresAt: now.add(const Duration(days: 30)),
-      amountPaid: (SubscriptionModel.planInfo(plan)['price'] as int).toDouble(),
+    final info = SubscriptionModel.planInfo(plan);
+    final price = (info['price'] as int).toDouble();
+
+    // Trigger Razorpay payment
+    PaymentService().payForSubscription(
+      amount: price,
+      planName: info['name'] as String,
+      userName: user.name,
+      userPhone: user.phone,
+      userUid: user.uid,
+      onSuccess: (paymentId) async {
+        setState(() => _loading = true);
+
+        final now = DateTime.now();
+        final sub = SubscriptionModel(
+          uid: user.uid,
+          plan: plan,
+          isActive: true,
+          startedAt: now,
+          expiresAt: now.add(const Duration(days: 30)),
+          amountPaid: price,
+          paymentId: paymentId,
+        );
+
+        try {
+          await FirebaseFirestore.instance
+              .collection('subscriptions')
+              .doc(user.uid)
+              .set(sub.toFirestore());
+
+          // Record payment
+          await PaymentService.recordPayment(
+            paymentId: paymentId,
+            type: 'subscription',
+            userUid: user.uid,
+            amount: price,
+            commission: 0,
+            metadata: {'plan': plan.name},
+          );
+
+          // Update ad service
+          await AdService().checkSubscriptionStatus();
+
+          _currentSub = sub;
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${info['name']} plan activated!'),
+                backgroundColor: AppColors.green,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Payment received but activation failed: $e'),
+                backgroundColor: AppColors.red,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            );
+          }
+        }
+
+        if (mounted) setState(() => _loading = false);
+      },
+      onFailure: (msg) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Payment failed: $msg'),
+              backgroundColor: AppColors.red,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      },
     );
-
-    setState(() => _loading = true);
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('subscriptions')
-          .doc(uid)
-          .set(sub.toFirestore());
-
-      // Update ad service
-      await AdService().checkSubscriptionStatus();
-
-      _currentSub = sub;
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${SubscriptionModel.planInfo(plan)['name']} plan activated!'),
-            backgroundColor: AppColors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed: $e'),
-            backgroundColor: AppColors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    }
-
-    if (mounted) setState(() => _loading = false);
   }
 
   @override
@@ -160,7 +196,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Payment gateway coming soon. For now, contact admin to activate your subscription.',
+                            'Payments are processed securely via Razorpay. Subscriptions auto-renew every 30 days.',
                             style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                           ),
                         ),

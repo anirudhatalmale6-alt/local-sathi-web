@@ -42,4 +42,33 @@ class AppConstants {
   /// Phone numbers that automatically get admin role on registration
   /// Add the owner's phone number here (without +91)
   static const List<String> adminPhones = [];
+
+  /// Commission slabs: [maxAmount, commissionPercent]
+  /// Applied based on booking value
+  static const List<List<num>> commissionSlabs = [
+    [499, 15],    // 0-499: 15%
+    [1999, 10],   // 500-1999: 10%
+    [4999, 7],    // 2000-4999: 7%
+    [99999999, 5], // 5000+: 5%
+  ];
+
+  /// Calculate commission based on tiered slabs
+  static double calculateCommission(double price) {
+    for (final slab in commissionSlabs) {
+      if (price <= slab[0]) {
+        return price * slab[1] / 100;
+      }
+    }
+    return price * 5 / 100; // fallback 5%
+  }
+
+  /// Get commission rate for a given price
+  static double getCommissionRate(double price) {
+    for (final slab in commissionSlabs) {
+      if (price <= slab[0]) {
+        return slab[1].toDouble();
+      }
+    }
+    return 5.0;
+  }
 }

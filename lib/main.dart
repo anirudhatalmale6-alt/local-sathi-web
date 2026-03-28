@@ -11,6 +11,7 @@ import 'screens/home/main_shell.dart';
 import 'services/auth_service.dart';
 import 'services/update_service.dart';
 import 'services/ad_service.dart';
+import 'services/payment_service.dart';
 import 'widgets/update_dialog.dart';
 
 void main() async {
@@ -32,6 +33,9 @@ void main() async {
 
   // Initialize AdMob (non-blocking)
   AdService().initialize();
+
+  // Initialize Razorpay payment service
+  PaymentService().initialize();
 
   runApp(const LocalSathiApp());
 }

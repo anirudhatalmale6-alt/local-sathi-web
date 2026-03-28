@@ -202,6 +202,16 @@ class _BookingCard extends StatelessWidget {
               ),
               const Spacer(),
               if (booking.agreedPrice != null) ...[
+                if (booking.paymentStatus == 'paid')
+                  Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text('PAID', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.green)),
+                  ),
                 Text(
                   '\u20B9${booking.agreedPrice!.toStringAsFixed(0)}',
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.teal),

@@ -20,6 +20,8 @@ class BookingModel {
   final String? customerPhone;
   final String? providerPhone;
   final String? location;
+  final String? paymentId;
+  final String paymentStatus; // 'unpaid', 'paid', 'refunded'
 
   BookingModel({
     required this.id,
@@ -39,6 +41,8 @@ class BookingModel {
     this.customerPhone,
     this.providerPhone,
     this.location,
+    this.paymentId,
+    this.paymentStatus = 'unpaid',
   });
 
   factory BookingModel.fromFirestore(DocumentSnapshot doc) {
@@ -64,6 +68,8 @@ class BookingModel {
       customerPhone: data['customerPhone'],
       providerPhone: data['providerPhone'],
       location: data['location'],
+      paymentId: data['paymentId'],
+      paymentStatus: data['paymentStatus'] ?? 'unpaid',
     );
   }
 
@@ -85,6 +91,8 @@ class BookingModel {
       'customerPhone': customerPhone,
       'providerPhone': providerPhone,
       'location': location,
+      'paymentId': paymentId,
+      'paymentStatus': paymentStatus,
     };
   }
 

@@ -3,10 +3,11 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../config/constants.dart';
 import '../../models/booking_model.dart';
 import '../../models/user_model.dart';
 import '../../providers/app_provider.dart';
-import '../../widgets/banner_ad_widget.dart';
+import '../../services/payment_service.dart';
 
 class CreateBookingScreen extends StatefulWidget {
   final UserModel provider;
@@ -24,7 +25,6 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
   TimeOfDay _scheduledTime = const TimeOfDay(hour: 10, minute: 0);
   String? _selectedCategory;
   bool _submitting = false;
-  double _commissionRate = 10.0;
 
   @override
   void initState() {
@@ -32,22 +32,6 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
     if (widget.provider.serviceCategories.isNotEmpty) {
       _selectedCategory = widget.provider.serviceCategories.first;
     }
-    _loadCommissionRate();
-  }
-
-  Future<void> _loadCommissionRate() async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('app_config')
-          .doc('monetisation')
-          .get();
-      if (doc.exists) {
-        final rate = (doc.data()?['commissionRate'] as num?)?.toDouble();
-        if (rate != null && mounted) {
-          setState(() => _commissionRate = rate);
-        }
-      }
-    } catch (_) {}
   }
 
   @override
@@ -70,7 +54,8 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
     setState(() => _submitting = true);
 
     final price = double.tryParse(_priceController.text.trim());
-    final commission = price != null ? (price * _commissionRate / 100) : 0.0;
+    final commissionRate = price != null ? AppConstants.getCommissionRate(price) : 0.0;
+    final commission = price != null ? AppConstants.calculateCommission(price) : 0.0;
 
     final scheduled = DateTime(
       _scheduledDate.year,
@@ -89,7 +74,7 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
       serviceCategory: _selectedCategory ?? 'General',
       description: _descController.text.trim(),
       agreedPrice: price,
-      commissionRate: _commissionRate,
+      commissionRate: commissionRate,
       commissionAmount: commission,
       scheduledAt: scheduled,
       createdAt: DateTime.now(),
@@ -101,17 +86,68 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
     );
 
     try {
-      await FirebaseFirestore.instance.collection('bookings').add(booking.toFirestore());
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Booking request sent!'),
-            backgroundColor: AppColors.green,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
+      final docRef = await FirebaseFirestore.instance.collection('bookings').add(booking.toFirestore());
+
+      // If price is set, trigger payment
+      if (price != null && price > 0 && mounted) {
+        PaymentService().payForBooking(
+          amount: price,
+          bookingId: docRef.id,
+          customerName: user.name,
+          customerPhone: user.phone,
+          description: '${_selectedCategory ?? "Service"} - ${widget.provider.name}',
+          onSuccess: (paymentId) async {
+            // Record payment and update booking
+            await PaymentService.recordPayment(
+              paymentId: paymentId,
+              type: 'booking',
+              userUid: user.uid,
+              amount: price,
+              commission: commission,
+              metadata: {'bookingId': docRef.id},
+            );
+            await docRef.update({'paymentId': paymentId, 'paymentStatus': 'paid'});
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Booking confirmed & payment received!'),
+                  backgroundColor: AppColors.green,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+              Navigator.pop(context);
+            }
+          },
+          onFailure: (msg) {
+            // Booking created but payment failed - mark as unpaid
+            docRef.update({'paymentStatus': 'unpaid'});
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Booking sent! Payment pending: $msg'),
+                  backgroundColor: AppColors.orange,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+              Navigator.pop(context);
+            }
+          },
         );
-        Navigator.pop(context);
+      } else {
+        // No price - just create booking without payment
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Booking request sent!'),
+              backgroundColor: AppColors.green,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+          Navigator.pop(context);
+        }
       }
     } catch (e) {
       _showError('Failed to create booking: $e');
@@ -135,7 +171,8 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
   Widget build(BuildContext context) {
     final provider = widget.provider;
     final price = double.tryParse(_priceController.text.trim());
-    final commission = price != null ? (price * _commissionRate / 100) : 0.0;
+    final commission = price != null ? AppConstants.calculateCommission(price) : 0.0;
+    final rate = price != null ? AppConstants.getCommissionRate(price) : 0.0;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -187,10 +224,6 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-
-            // Banner Ad
-            const BannerAdWidget(),
             const SizedBox(height: 16),
 
             // Category selector
@@ -250,7 +283,7 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Platform fee: \u20B9${commission.toStringAsFixed(0)} (${_commissionRate.toStringAsFixed(0)}%) | You pay: \u20B9${price.toStringAsFixed(0)}',
+                        'Platform fee: \u20B9${commission.toStringAsFixed(0)} (${rate.toStringAsFixed(0)}%) | You pay: \u20B9${price.toStringAsFixed(0)}',
                         style: const TextStyle(fontSize: 12, color: AppColors.orange),
                       ),
                     ),

@@ -246,14 +246,6 @@ class ProviderDetailScreen extends StatelessWidget {
                   ),
                 ),
 
-                // Banner Ad
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(20, 8, 20, 0),
-                    child: BannerAdWidget(),
-                  ),
-                ),
-
                 const SliverToBoxAdapter(child: SizedBox(height: 20)),
               ],
             ),

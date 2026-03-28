@@ -169,14 +169,7 @@ class _ChatsTabState extends State<_ChatsTab> {
         // Enrich any conversations with missing names
         _enrichMissingNames(convs);
 
-        return Column(
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: BannerAdWidget(),
-            ),
-            Expanded(
-              child: ListView.builder(
+        return ListView.builder(
           padding: const EdgeInsets.only(top: 8),
           itemCount: convs.length,
           itemBuilder: (context, index) {
@@ -184,9 +177,6 @@ class _ChatsTabState extends State<_ChatsTab> {
             final unread = conv.unreadFor(widget.currentUid);
             return _conversationTile(context, conv, unread);
           },
-        ),
-            ),
-          ],
         );
       },
     );

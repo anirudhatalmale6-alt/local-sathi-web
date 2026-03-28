@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../../../config/theme.dart';
 import '../../../config/constants.dart';
 import '../../../services/firestore_service.dart';
@@ -532,16 +533,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 },
               ),
               const Divider(),
-              // Commission Rate
-              ListTile(
+              // Commission Slabs
+              const ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Commission Rate', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('${commissionRate.toStringAsFixed(1)}% on each booking'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.edit, color: AppColors.teal),
-                  onPressed: () => _editCommissionRate(commissionRate),
-                ),
+                title: Text('Commission Slabs', style: TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text('Tiered commission based on booking value'),
               ),
+              _commissionSlabTable(),
               const Divider(),
               // Subscription Management
               ListTile(
@@ -558,34 +556,49 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _editCommissionRate(double current) {
-    final controller = TextEditingController(text: current.toStringAsFixed(1));
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Commission Rate'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Rate (%)',
-            suffixText: '%',
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              final rate = double.tryParse(controller.text);
-              if (rate != null && rate >= 0 && rate <= 100) {
-                FirebaseFirestore.instance
-                    .collection('app_config')
-                    .doc('monetisation')
-                    .set({'commissionRate': rate}, SetOptions(merge: true));
-                Navigator.pop(ctx);
-              }
+  Widget _commissionSlabTable() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Commission Slabs', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+          const SizedBox(height: 8),
+          Table(
+            border: TableBorder.all(color: AppColors.bg, width: 1),
+            columnWidths: const {
+              0: FlexColumnWidth(2),
+              1: FlexColumnWidth(1),
             },
-            child: const Text('Save'),
+            children: [
+              TableRow(
+                decoration: BoxDecoration(color: AppColors.teal.withOpacity(0.1)),
+                children: const [
+                  Padding(padding: EdgeInsets.all(10), child: Text('Booking Value', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+                  Padding(padding: EdgeInsets.all(10), child: Text('Rate', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
+                ],
+              ),
+              ...AppConstants.commissionSlabs.map((slab) {
+                final maxVal = slab[0].toInt();
+                final rate = slab[1].toInt();
+                final label = maxVal >= 99999999
+                    ? '\u20B95,000+'
+                    : maxVal <= 499
+                        ? '\u20B90 - \u20B9${maxVal}'
+                        : '\u20B9${maxVal == 1999 ? "500" : "2,000"} - \u20B9${NumberFormat('#,###').format(maxVal)}';
+                return TableRow(
+                  children: [
+                    Padding(padding: const EdgeInsets.all(10), child: Text(label, style: const TextStyle(fontSize: 13))),
+                    Padding(padding: const EdgeInsets.all(10), child: Text('$rate%', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.teal))),
+                  ],
+                );
+              }),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Slabs are configured in app code (constants.dart)',
+            style: TextStyle(fontSize: 11, color: AppColors.textMuted),
           ),
         ],
       ),
