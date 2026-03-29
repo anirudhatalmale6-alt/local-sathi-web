@@ -96,29 +96,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // Validate Aadhaar number if entered
+    // Validate Aadhaar number (mandatory)
     final aadhaarNumber = _aadhaarController.text.trim().replaceAll(' ', '');
-    if (aadhaarNumber.isNotEmpty) {
-      if (!_isValidAadhaar(aadhaarNumber)) {
-        setState(() => _aadhaarError = 'Please enter a valid 12-digit Aadhaar number');
-        return;
-      }
+    if (aadhaarNumber.isEmpty) {
+      setState(() => _aadhaarError = 'Aadhaar number is required');
+      _showError('Please enter your Aadhaar number');
+      return;
+    }
+    if (!_isValidAadhaar(aadhaarNumber)) {
+      setState(() => _aadhaarError = 'Please enter a valid 12-digit Aadhaar number');
+      return;
+    }
 
-      // Check for duplicate
+    // Aadhaar photo is mandatory
+    if (_aadhaarImageFile == null) {
+      _showError('Please upload a photo of your Aadhaar card');
+      return;
+    }
+
+    // Check for duplicate
+    setState(() {
+      _isLoading = true;
+      _aadhaarError = null;
+    });
+
+    final isDuplicate = await _isAadhaarDuplicate(aadhaarNumber);
+    if (isDuplicate) {
       setState(() {
-        _isLoading = true;
-        _aadhaarError = null;
+        _isLoading = false;
+        _aadhaarError = 'This Aadhaar number is already registered';
       });
-
-      final isDuplicate = await _isAadhaarDuplicate(aadhaarNumber);
-      if (isDuplicate) {
-        setState(() {
-          _isLoading = false;
-          _aadhaarError = 'This Aadhaar number is already registered';
-        });
-        _showError('This Aadhaar number is already registered with another account');
-        return;
-      }
+      _showError('This Aadhaar number is already linked to another account. One Aadhaar = one account.');
+      return;
     }
 
     setState(() => _isLoading = true);
@@ -131,13 +140,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         phone: widget.phone,
       );
 
-      // Save Aadhaar number if provided
-      if (aadhaarNumber.isNotEmpty) {
-        await _authService.updateUserProfile(widget.uid, {
-          'aadhaarNumber': aadhaarNumber,
-          'aadhaarVerified': false,
-        });
-      }
+      // Save Aadhaar number (mandatory, one per account)
+      await _authService.updateUserProfile(widget.uid, {
+        'aadhaarNumber': aadhaarNumber,
+        'aadhaarVerified': false,
+      });
 
       // If provider, update role and category
       if (_isProvider) {
@@ -382,25 +389,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              _isProvider
-                  ? 'Aadhaar is required for providers to prevent duplicate registrations.'
-                  : 'Optional. Helps verify your identity.',
+              'One Aadhaar number can be linked to only one account.',
               style: TextStyle(
                 fontSize: 11,
-                color: _isProvider ? AppColors.orange : AppColors.textMuted,
+                color: AppColors.orange,
               ),
             ),
 
             const SizedBox(height: 16),
 
-            // Aadhaar image upload (optional)
-            const Text(
-              'Upload Aadhaar Card (Optional)',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-              ),
+            // Aadhaar image upload (mandatory)
+            Row(
+              children: [
+                const Text(
+                  'Upload Aadhaar Card',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.text,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text('*', style: TextStyle(fontSize: 14, color: AppColors.red, fontWeight: FontWeight.w700)),
+              ],
             ),
             const SizedBox(height: 8),
             GestureDetector(
@@ -480,10 +491,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Photo helps speed up manual verification.',
+              'Admin will manually verify your Aadhaar to activate your account.',
               style: TextStyle(
                 fontSize: 11,
-                color: AppColors.textMuted,
+                color: AppColors.orange,
               ),
             ),
 
