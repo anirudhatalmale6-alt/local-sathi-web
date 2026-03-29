@@ -14,14 +14,12 @@ class AdService {
   bool _isPremium = false;
   DateTime? _premiumExpiry;
 
-  // Test Ad Unit IDs (replace with real ones from client's AdMob account)
-  static const _testBannerId = 'ca-app-pub-3940256099942544/6300978111';
-  static const _testInterstitialId = 'ca-app-pub-3940256099942544/1033173712';
-  static const _testRewardedId = 'ca-app-pub-3940256099942544/5224354917';
+  // Live Ad Unit IDs
+  static const _bannerId = 'ca-app-pub-5100154126119051/9358083092';
+  static const _interstitialId = 'ca-app-pub-5100154126119051/9218279031';
 
-  String get bannerAdUnitId => _testBannerId;
-  String get interstitialAdUnitId => _testInterstitialId;
-  String get rewardedAdUnitId => _testRewardedId;
+  String get bannerAdUnitId => _bannerId;
+  String get interstitialAdUnitId => _interstitialId;
 
   bool get isPremium => _isPremium;
   bool get shouldShowAds => !_isPremium && !kIsWeb;
