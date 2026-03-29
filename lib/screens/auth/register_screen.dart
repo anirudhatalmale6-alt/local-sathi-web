@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io';
 import '../../config/theme.dart';
 import '../../services/auth_service.dart';
@@ -22,6 +24,7 @@ class RegisterScreen extends StatefulWidget {
 
 class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
+  final _aadhaarController = TextEditingController();
   final _authService = AuthService();
   final _storageService = StorageService();
   bool _isLoading = false;
@@ -33,6 +36,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   double _uploadProgress = 0;
   List<String> _categories = [];
   bool _loadingCategories = true;
+  String? _aadhaarError;
 
   @override
   void initState() {
@@ -66,11 +70,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  /// Validate Aadhaar: 12 digits, Verhoeff checksum
+  bool _isValidAadhaar(String number) {
+    if (number.length != 12) return false;
+    if (!RegExp(r'^\d{12}$').hasMatch(number)) return false;
+    // Reject all-same digits
+    if (RegExp(r'^(\d)\1{11}$').hasMatch(number)) return false;
+    return true;
+  }
+
+  /// Check if Aadhaar number already exists in database
+  Future<bool> _isAadhaarDuplicate(String aadhaarNumber) async {
+    final snap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('aadhaarNumber', isEqualTo: aadhaarNumber)
+        .limit(1)
+        .get();
+    return snap.docs.isNotEmpty;
+  }
+
   Future<void> _register() async {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
       _showError('Please enter your name');
       return;
+    }
+
+    // Validate Aadhaar number if entered
+    final aadhaarNumber = _aadhaarController.text.trim().replaceAll(' ', '');
+    if (aadhaarNumber.isNotEmpty) {
+      if (!_isValidAadhaar(aadhaarNumber)) {
+        setState(() => _aadhaarError = 'Please enter a valid 12-digit Aadhaar number');
+        return;
+      }
+
+      // Check for duplicate
+      setState(() {
+        _isLoading = true;
+        _aadhaarError = null;
+      });
+
+      final isDuplicate = await _isAadhaarDuplicate(aadhaarNumber);
+      if (isDuplicate) {
+        setState(() {
+          _isLoading = false;
+          _aadhaarError = 'This Aadhaar number is already registered';
+        });
+        _showError('This Aadhaar number is already registered with another account');
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
@@ -83,6 +131,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
         phone: widget.phone,
       );
 
+      // Save Aadhaar number if provided
+      if (aadhaarNumber.isNotEmpty) {
+        await _authService.updateUserProfile(widget.uid, {
+          'aadhaarNumber': aadhaarNumber,
+          'aadhaarVerified': false,
+        });
+      }
+
       // If provider, update role and category
       if (_isProvider) {
         await _authService.updateUserProfile(widget.uid, {
@@ -91,7 +147,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         });
       }
 
-      // Upload Aadhaar if selected
+      // Upload Aadhaar image if selected
       if (_aadhaarImageFile != null) {
         setState(() {
           _isUploading = true;
@@ -284,7 +340,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
             const SizedBox(height: 24),
 
-            // Aadhaar upload
+            // Aadhaar section
             const Text(
               'Aadhaar Verification',
               style: TextStyle(
@@ -295,10 +351,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Upload your Aadhaar card for identity verification',
+              'Enter your Aadhaar number for identity verification',
               style: TextStyle(
                 fontSize: 12,
                 color: AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Aadhaar number input
+            TextField(
+              controller: _aadhaarController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(12),
+                _AadhaarInputFormatter(),
+              ],
+              onChanged: (_) {
+                if (_aadhaarError != null) setState(() => _aadhaarError = null);
+              },
+              decoration: InputDecoration(
+                hintText: 'XXXX XXXX XXXX',
+                prefixIcon: const Icon(Icons.badge_outlined, color: AppColors.teal),
+                errorText: _aadhaarError,
+                suffixIcon: _aadhaarController.text.replaceAll(' ', '').length == 12
+                    ? const Icon(Icons.check_circle, color: AppColors.green, size: 20)
+                    : null,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _isProvider
+                  ? 'Aadhaar is required for providers to prevent duplicate registrations.'
+                  : 'Optional. Helps verify your identity.',
+              style: TextStyle(
+                fontSize: 11,
+                color: _isProvider ? AppColors.orange : AppColors.textMuted,
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Aadhaar image upload (optional)
+            const Text(
+              'Upload Aadhaar Card (Optional)',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
@@ -379,12 +480,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _isProvider
-                  ? 'Aadhaar verification is required for service providers.'
-                  : 'You can skip this now and verify later from your profile.',
+              'Photo helps speed up manual verification.',
               style: TextStyle(
                 fontSize: 11,
-                color: _isProvider ? AppColors.orange : AppColors.textMuted,
+                color: AppColors.textMuted,
               ),
             ),
 
@@ -477,6 +576,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Formats Aadhaar input as XXXX XXXX XXXX
+class _AadhaarInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(' ', '');
+    if (digits.length > 12) return oldValue;
+
+    final buffer = StringBuffer();
+    for (int i = 0; i < digits.length; i++) {
+      if (i > 0 && i % 4 == 0) buffer.write(' ');
+      buffer.write(digits[i]);
+    }
+
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }
