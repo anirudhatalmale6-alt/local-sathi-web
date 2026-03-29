@@ -7,8 +7,8 @@ class PaymentService {
   factory PaymentService() => _instance;
   PaymentService._();
 
-  // Razorpay TEST key - replace with live key for production
-  static const String _testKey = 'rzp_test_1DP5mmOlF5G5ag';
+  // Razorpay Test key (client's account)
+  static const String _testKey = 'rzp_test_SX9fNFIyOKIQAJ';
 
   late Razorpay _razorpay;
   Function(String paymentId)? _onSuccess;
