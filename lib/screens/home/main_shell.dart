@@ -41,7 +41,6 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _checkForUpdates() async {
     if (kIsWeb) return;
-    // Small delay so UI renders first
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
@@ -58,14 +57,11 @@ class _MainShellState extends State<MainShell> {
           ),
         );
       }
-    } catch (_) {
-      // Update check failed silently
-    }
+    } catch (_) {}
   }
 
   void _onNavTap(int index) {
     if (index == 2) {
-      // Center button = compose post
       _openCompose();
       return;
     }
@@ -81,22 +77,47 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
+  Widget _buildBody(int idx) {
+    return IndexedStack(
+      index: idx < 2 ? idx : (idx > 2 ? idx - 1 : 0),
+      children: [
+        _screens[0],
+        _screens[1],
+        _screens[3],
+        _screens[4],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AppProvider>(
       builder: (context, appProvider, _) {
         final idx = appProvider.currentTabIndex;
+        final width = MediaQuery.of(context).size.width;
+        final isDesktop = kIsWeb && width >= 900;
 
+        if (isDesktop) {
+          return Scaffold(
+            body: Row(
+              children: [
+                // Sidebar navigation
+                _DesktopSidebar(
+                  currentIndex: idx,
+                  onTap: _onNavTap,
+                  userName: appProvider.currentUser?.name ?? '',
+                  userPhoto: appProvider.currentUser?.profilePhotoUrl,
+                ),
+                // Main content
+                Expanded(child: _buildBody(idx)),
+              ],
+            ),
+          );
+        }
+
+        // Mobile / tablet layout with bottom nav
         return Scaffold(
-          body: IndexedStack(
-            index: idx < 2 ? idx : (idx > 2 ? idx - 1 : 0),
-            children: [
-              _screens[0],
-              _screens[1],
-              _screens[3],
-              _screens[4],
-            ],
-          ),
+          body: _buildBody(idx),
           bottomNavigationBar: Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -186,6 +207,222 @@ class _MainShellState extends State<MainShell> {
             ],
           ),
           child: const Icon(Icons.add, color: Colors.white, size: 26),
+        ),
+      ),
+    );
+  }
+}
+
+// Desktop sidebar navigation
+class _DesktopSidebar extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final String userName;
+  final String? userPhoto;
+
+  const _DesktopSidebar({
+    required this.currentIndex,
+    required this.onTap,
+    required this.userName,
+    this.userPhoto,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 240,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 16,
+            offset: const Offset(2, 0),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 24),
+          // Logo / Brand
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.tealGradient,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.location_on, color: Colors.white, size: 22),
+                ),
+                const SizedBox(width: 12),
+                const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'LOCAL SATHI',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.text,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    Text(
+                      'Community Companion',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppColors.textMuted,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+
+          // Navigation items
+          _sidebarItem(0, Icons.home_rounded, 'Home'),
+          _sidebarItem(1, Icons.explore_rounded, 'Discover'),
+          _sidebarItem(3, Icons.chat_rounded, 'Messages'),
+          _sidebarItem(4, Icons.person_rounded, 'Profile'),
+
+          const SizedBox(height: 8),
+          const Divider(indent: 20, endIndent: 20),
+          const SizedBox(height: 8),
+
+          // Compose post button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => onTap(2),
+                borderRadius: BorderRadius.circular(14),
+                child: Ink(
+                  decoration: BoxDecoration(
+                    gradient: AppColors.tealBlueGradient,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.edit_rounded, color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'New Post',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // User info at bottom
+          if (userName.isNotEmpty)
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.bg,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: AppColors.teal,
+                    backgroundImage: userPhoto != null ? NetworkImage(userPhoto!) : null,
+                    child: userPhoto == null
+                        ? Text(
+                            userName.isNotEmpty ? userName[0].toUpperCase() : '?',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      userName,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.text,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _sidebarItem(int index, IconData icon, String label) {
+    final active = currentIndex == index;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => onTap(index),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: active ? AppColors.teal.withOpacity(0.08) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 22,
+                  color: active ? AppColors.teal : AppColors.textMuted,
+                ),
+                const SizedBox(width: 14),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    color: active ? AppColors.teal : AppColors.textSecondary,
+                  ),
+                ),
+                if (active) ...[
+                  const Spacer(),
+                  Container(
+                    width: 4,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: AppColors.teal,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
