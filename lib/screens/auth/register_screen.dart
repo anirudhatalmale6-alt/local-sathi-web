@@ -32,6 +32,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   XFile? _aadhaarImageFile;
   File? _aadhaarImage;
   String _selectedCategory = '';
+  final _customCategoryController = TextEditingController();
   bool _isUploading = false;
   double _uploadProgress = 0;
   List<String> _categories = [];
@@ -108,6 +109,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    // Validate custom category if "Other" selected
+    if (_isProvider && _selectedCategory == 'Other' && _customCategoryController.text.trim().isEmpty) {
+      _showError('Please enter your service category');
+      return;
+    }
+
     // Aadhaar photo is mandatory
     if (_aadhaarImageFile == null) {
       _showError('Please upload a photo of your Aadhaar card');
@@ -148,9 +155,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       // If provider, update role and category
       if (_isProvider) {
+        final category = _selectedCategory == 'Other'
+            ? _customCategoryController.text.trim()
+            : _selectedCategory;
         await _authService.updateUserProfile(widget.uid, {
           'role': 'provider',
-          'serviceCategories': [_selectedCategory],
+          'serviceCategories': [category],
         });
       }
 
@@ -343,6 +353,33 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   );
                 }).toList(),
               ),
+              // Custom category input when "Other" is selected
+              if (_selectedCategory == 'Other') ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _customCategoryController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    hintText: 'Enter your service category',
+                    prefixIcon: const Icon(Icons.edit, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: AppColors.teal, width: 2),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  ),
+                ),
+              ],
             ],
 
             const SizedBox(height: 24),
