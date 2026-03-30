@@ -163,7 +163,7 @@ class HomeScreen extends StatelessWidget {
                                 child: _featureCard(
                                   context,
                                   icon: Icons.storefront_rounded,
-                                  label: isDesktop ? 'Marketplace' : 'Market\nPlace',
+                                  label: isDesktop ? 'Marketplace' : 'Market\nplace',
                                   gradient: const LinearGradient(colors: [Color(0xFFE65100), Color(0xFFFF9800)]),
                                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MarketplaceScreen())),
                                 ),
@@ -637,126 +637,88 @@ class HomeScreen extends StatelessWidget {
 
   // Mobile quick actions: original row layout
   Widget _buildMobileQuickActions(BuildContext context, AppProvider appProvider) {
-    return Row(
-      children: [
-        Expanded(
-          child: GestureDetector(
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _mobileActionChip(
+            icon: Icons.emergency,
+            label: 'SOS',
+            gradient: const LinearGradient(colors: [Color(0xFFE53935), Color(0xFFFF5252)]),
+            shadowColor: const Color(0xFFE53935),
             onTap: () => showModalBottomSheet(
               context: context,
               isScrollControlled: true,
               backgroundColor: Colors.transparent,
               builder: (_) => const EmergencySheet(),
             ),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFE53935), Color(0xFFFF5252)]),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: const Color(0xFFE53935).withAlpha(60), blurRadius: 12, offset: const Offset(0, 4))],
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.emergency, color: Colors.white, size: 22),
-                  SizedBox(width: 8),
-                  Text('SOS', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-                ],
-              ),
-            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen())),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFFF8F00), Color(0xFFFFA726)]),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: const Color(0xFFFF8F00).withAlpha(60), blurRadius: 12, offset: const Offset(0, 4))],
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.stars_rounded, color: Colors.white, size: 22),
-                  SizedBox(width: 8),
-                  Text('Wallet', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen())),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF7B1FA2), Color(0xFFAB47BC)]),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: const Color(0xFF7B1FA2).withAlpha(60), blurRadius: 12, offset: const Offset(0, 4))],
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('\u{1F916}', style: TextStyle(fontSize: 18)),
-                  SizedBox(width: 6),
-                  Text('AI', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        if (!AdService().isPremium)
-          Expanded(
-            child: GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFFFF6F00), Color(0xFFFFCA28)]),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: const Color(0xFFFF6F00).withAlpha(60), blurRadius: 12, offset: const Offset(0, 4))],
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.diamond, color: Colors.white, size: 20),
-                    SizedBox(width: 4),
-                    Text('PRO', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        if (!AdService().isPremium)
           const SizedBox(width: 10),
-        if (appProvider.currentUser?.isProvider == true)
-          Expanded(
-            child: GestureDetector(
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkNearbyScreen())),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [Color(0xFF1565C0), Color(0xFF42A5F5)]),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: const Color(0xFF1565C0).withAlpha(60), blurRadius: 12, offset: const Offset(0, 4))],
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.work, color: Colors.white, size: 22),
-                    SizedBox(width: 8),
-                    Text('Jobs', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white)),
-                  ],
-                ),
-              ),
-            ),
+          _mobileActionChip(
+            icon: Icons.stars_rounded,
+            label: 'Wallet',
+            gradient: const LinearGradient(colors: [Color(0xFFFF8F00), Color(0xFFFFA726)]),
+            shadowColor: const Color(0xFFFF8F00),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WalletScreen())),
           ),
-      ],
+          const SizedBox(width: 10),
+          _mobileActionChip(
+            icon: Icons.smart_toy_rounded,
+            label: 'AI',
+            gradient: const LinearGradient(colors: [Color(0xFF7B1FA2), Color(0xFFAB47BC)]),
+            shadowColor: const Color(0xFF7B1FA2),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatScreen())),
+          ),
+          if (!AdService().isPremium) ...[
+            const SizedBox(width: 10),
+            _mobileActionChip(
+              icon: Icons.diamond,
+              label: 'PRO',
+              gradient: const LinearGradient(colors: [Color(0xFFFF6F00), Color(0xFFFFCA28)]),
+              shadowColor: const Color(0xFFFF6F00),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen())),
+            ),
+          ],
+          if (appProvider.currentUser?.isProvider == true) ...[
+            const SizedBox(width: 10),
+            _mobileActionChip(
+              icon: Icons.work,
+              label: 'Jobs',
+              gradient: const LinearGradient(colors: [Color(0xFF1565C0), Color(0xFF42A5F5)]),
+              shadowColor: const Color(0xFF1565C0),
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkNearbyScreen())),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileActionChip({
+    required IconData icon,
+    required String label,
+    required Gradient gradient,
+    required Color shadowColor,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: gradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: shadowColor.withAlpha(60), blurRadius: 12, offset: const Offset(0, 4))],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+          ],
+        ),
+      ),
     );
   }
 
