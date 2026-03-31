@@ -94,6 +94,39 @@ class PaymentService {
     _razorpay.open(options);
   }
 
+  /// Start a payment for wallet deposit
+  void payForWalletDeposit({
+    required double amount,
+    required String userName,
+    required String userPhone,
+    required String userUid,
+    required Function(String paymentId) onSuccess,
+    required Function(String message) onFailure,
+  }) {
+    _onSuccess = onSuccess;
+    _onFailure = onFailure;
+
+    final options = {
+      'key': _testKey,
+      'amount': (amount * 100).toInt(),
+      'name': 'Local Sathi',
+      'description': 'Add Money to Sathi Wallet',
+      'prefill': {
+        'contact': userPhone,
+        'name': userName,
+      },
+      'notes': {
+        'user_uid': userUid,
+        'type': 'wallet_deposit',
+      },
+      'theme': {
+        'color': '#00897B',
+      },
+    };
+
+    _razorpay.open(options);
+  }
+
   void _handleSuccess(PaymentSuccessResponse response) {
     _onSuccess?.call(response.paymentId ?? 'unknown');
   }
@@ -110,7 +143,7 @@ class PaymentService {
   /// Record payment in Firestore
   static Future<void> recordPayment({
     required String paymentId,
-    required String type, // 'booking' or 'subscription'
+    required String type, // 'booking' or 'subscription' or 'wallet_deposit'
     required String userUid,
     required double amount,
     required double commission,

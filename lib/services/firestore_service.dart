@@ -457,6 +457,152 @@ class FirestoreService {
     await markRewardGiven(uid, rewardKey);
   }
 
+  // ===== WALLET MONEY OPERATIONS =====
+
+  // Deposit money to wallet (after Razorpay payment success)
+  Future<void> walletDeposit(String uid, double amount, String paymentId) async {
+    final walletRef = _firestore.collection('wallets').doc(uid);
+    final txRef = walletRef.collection('transactions').doc();
+    final amountPaise = (amount * 100).round(); // store as paise for precision
+
+    final batch = _firestore.batch();
+    batch.set(walletRef, {
+      'moneyBalance': FieldValue.increment(amountPaise),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    }, SetOptions(merge: true));
+
+    batch.set(txRef, {
+      'description': 'Added money to wallet',
+      'points': 0,
+      'amount': amount,
+      'type': WalletTransactionType.deposit.name,
+      'paymentId': paymentId,
+      'status': 'completed',
+      'createdAt': Timestamp.fromDate(DateTime.now()),
+    });
+
+    await batch.commit();
+  }
+
+  // Get wallet money balance (returns in rupees)
+  Future<double> getWalletMoneyBalance(String uid) async {
+    final doc = await _firestore.collection('wallets').doc(uid).get();
+    if (!doc.exists) return 0;
+    final paise = (doc.data()?['moneyBalance'] ?? 0) as int;
+    return paise / 100.0;
+  }
+
+  // Transfer money to another user
+  Future<bool> walletTransfer(String fromUid, String fromName, String toUid, String toName, double amount) async {
+    final amountPaise = (amount * 100).round();
+
+    // Check sender balance
+    final senderDoc = await _firestore.collection('wallets').doc(fromUid).get();
+    final senderBalance = (senderDoc.data()?['moneyBalance'] ?? 0) as int;
+    if (senderBalance < amountPaise) return false;
+
+    final senderRef = _firestore.collection('wallets').doc(fromUid);
+    final receiverRef = _firestore.collection('wallets').doc(toUid);
+    final senderTxRef = senderRef.collection('transactions').doc();
+    final receiverTxRef = receiverRef.collection('transactions').doc();
+    final now = DateTime.now();
+
+    final batch = _firestore.batch();
+
+    // Deduct from sender
+    batch.set(senderRef, {
+      'moneyBalance': FieldValue.increment(-amountPaise),
+      'updatedAt': Timestamp.fromDate(now),
+    }, SetOptions(merge: true));
+
+    batch.set(senderTxRef, {
+      'description': 'Sent to $toName',
+      'points': 0,
+      'amount': amount,
+      'type': WalletTransactionType.transferOut.name,
+      'relatedUserId': toUid,
+      'relatedUserName': toName,
+      'status': 'completed',
+      'createdAt': Timestamp.fromDate(now),
+    });
+
+    // Add to receiver
+    batch.set(receiverRef, {
+      'moneyBalance': FieldValue.increment(amountPaise),
+      'updatedAt': Timestamp.fromDate(now),
+    }, SetOptions(merge: true));
+
+    batch.set(receiverTxRef, {
+      'description': 'Received from $fromName',
+      'points': 0,
+      'amount': amount,
+      'type': WalletTransactionType.transferIn.name,
+      'relatedUserId': fromUid,
+      'relatedUserName': fromName,
+      'status': 'completed',
+      'createdAt': Timestamp.fromDate(now),
+    });
+
+    await batch.commit();
+    return true;
+  }
+
+  // Request withdrawal
+  Future<void> walletWithdrawRequest(String uid, String userName, double amount, String upiId) async {
+    final amountPaise = (amount * 100).round();
+
+    // Check balance
+    final walletDoc = await _firestore.collection('wallets').doc(uid).get();
+    final balance = (walletDoc.data()?['moneyBalance'] ?? 0) as int;
+    if (balance < amountPaise) throw Exception('Insufficient balance');
+
+    final walletRef = _firestore.collection('wallets').doc(uid);
+    final txRef = walletRef.collection('transactions').doc();
+    final now = DateTime.now();
+
+    final batch = _firestore.batch();
+
+    // Deduct balance immediately (hold)
+    batch.set(walletRef, {
+      'moneyBalance': FieldValue.increment(-amountPaise),
+      'updatedAt': Timestamp.fromDate(now),
+    }, SetOptions(merge: true));
+
+    // Add pending transaction
+    batch.set(txRef, {
+      'description': 'Withdrawal to UPI: $upiId',
+      'points': 0,
+      'amount': amount,
+      'type': WalletTransactionType.withdraw.name,
+      'status': 'pending',
+      'createdAt': Timestamp.fromDate(now),
+    });
+
+    // Add to admin withdrawal requests
+    batch.set(_firestore.collection('withdrawRequests').doc(txRef.id), {
+      'uid': uid,
+      'userName': userName,
+      'amount': amount,
+      'upiId': upiId,
+      'transactionId': txRef.id,
+      'status': 'pending',
+      'createdAt': Timestamp.fromDate(now),
+    });
+
+    await batch.commit();
+  }
+
+  // Find user by phone number (for transfers)
+  Future<Map<String, dynamic>?> findUserByPhone(String phone) async {
+    final snap = await _firestore.collection('users')
+        .where('phone', isEqualTo: phone)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final doc = snap.docs.first;
+    return {'uid': doc.id, ...doc.data()};
+  }
+
   // Get app stats (client-side counting to avoid composite index requirements)
   Future<Map<String, int>> getAppStats() async {
     // Fetch all users once and count client-side
