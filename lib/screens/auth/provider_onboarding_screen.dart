@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../config/theme.dart';
+import '../../config/constants.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
@@ -28,7 +29,9 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
   // Step 1: Service details
   final _descriptionController = TextEditingController();
   final _rateController = TextEditingController();
+  final _customCategoryController = TextEditingController();
   final _selectedCategories = <String>{};
+  final _customCategories = <String>[];
   List<String> _allCategories = [];
   bool _loadingCategories = true;
 
@@ -51,13 +54,43 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
   }
 
   Future<void> _loadCategories() async {
-    final cats = await FirestoreService().getCategoryList();
-    if (mounted) {
-      setState(() {
-        _allCategories = [...cats, 'Other'];
-        _loadingCategories = false;
-      });
+    // Always use hardcoded categories as base, then merge any from Firestore
+    final hardcoded = AppConstants.allCategories.toList();
+    try {
+      final firestoreCats = await FirestoreService().getCategoryList();
+      // Merge: hardcoded first, then any Firestore-only categories
+      final merged = [...hardcoded];
+      for (final cat in firestoreCats) {
+        if (!merged.contains(cat)) merged.add(cat);
+      }
+      if (mounted) {
+        setState(() {
+          _allCategories = merged;
+          _loadingCategories = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _allCategories = hardcoded;
+          _loadingCategories = false;
+        });
+      }
     }
+  }
+
+  void _addCustomCategory() {
+    final text = _customCategoryController.text.trim();
+    if (text.isEmpty) return;
+    if (_allCategories.contains(text) || _customCategories.contains(text)) {
+      _showError('This category already exists');
+      return;
+    }
+    setState(() {
+      _customCategories.add(text);
+      _selectedCategories.add(text);
+      _customCategoryController.clear();
+    });
   }
 
   @override
@@ -65,6 +98,7 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
     _pageController.dispose();
     _descriptionController.dispose();
     _rateController.dispose();
+    _customCategoryController.dispose();
     _areaController.dispose();
     _cityController.dispose();
     _stateController.dispose();
@@ -313,6 +347,7 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
   }
 
   Widget _buildServiceStep() {
+    final allCats = [..._allCategories, ..._customCategories];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -336,8 +371,9 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: _allCategories.map((cat) {
+            children: allCats.map((cat) {
               final selected = _selectedCategories.contains(cat);
+              final isCustom = _customCategories.contains(cat);
               return GestureDetector(
                 onTap: () {
                   setState(() {
@@ -351,10 +387,10 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   decoration: BoxDecoration(
-                    color: selected ? AppColors.teal : Colors.white,
+                    color: selected ? (isCustom ? AppColors.orange : AppColors.teal) : Colors.white,
                     borderRadius: BorderRadius.circular(100),
                     border: Border.all(
-                      color: selected ? AppColors.teal : const Color(0xFFE5E7EB),
+                      color: selected ? (isCustom ? AppColors.orange : AppColors.teal) : const Color(0xFFE5E7EB),
                       width: 1.5,
                     ),
                   ),
@@ -380,6 +416,55 @@ class _ProviderOnboardingScreenState extends State<ProviderOnboardingScreen> {
               );
             }).toList(),
           ),
+
+          // Add custom category
+          const SizedBox(height: 16),
+          const Text(
+            'Don\'t see your service? Add it below:',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customCategoryController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    hintText: 'e.g. Courier, Interior Design...',
+                    hintStyle: const TextStyle(fontSize: 13),
+                    prefixIcon: const Icon(Icons.add_circle_outline, color: AppColors.teal, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: AppColors.teal, width: 2),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  onSubmitted: (_) => _addCustomCategory(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: _addCustomCategory,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('Add', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+
           const SizedBox(height: 24),
           const Text(
             'Describe your services',

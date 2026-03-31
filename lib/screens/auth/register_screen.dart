@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:io';
 import '../../config/theme.dart';
+import '../../config/constants.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
@@ -46,11 +47,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _loadCategories() async {
-    final cats = await FirestoreService().getCategoryList();
+    // Always use hardcoded categories as base
+    final hardcoded = AppConstants.allCategories.toList();
+    try {
+      final firestoreCats = await FirestoreService().getCategoryList();
+      for (final cat in firestoreCats) {
+        if (!hardcoded.contains(cat)) hardcoded.add(cat);
+      }
+    } catch (_) {}
     if (mounted) {
       setState(() {
-        _categories = [...cats, 'Other'];
-        _selectedCategory = cats.isNotEmpty ? cats.first : 'Other';
+        _categories = [...hardcoded, 'Other'];
+        _selectedCategory = hardcoded.isNotEmpty ? hardcoded.first : 'Other';
         _loadingCategories = false;
       });
     }
