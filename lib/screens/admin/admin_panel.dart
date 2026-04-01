@@ -7,6 +7,7 @@ import 'pages/verification_page.dart';
 import 'pages/moderation_page.dart';
 import 'pages/team_page.dart';
 import 'pages/settings_page.dart';
+import 'pages/community_providers_page.dart';
 
 class AdminPanel extends StatefulWidget {
   final UserModel currentUser;
@@ -29,6 +30,7 @@ class _AdminPanelState extends State<AdminPanel> {
       _NavItem(Icons.people_rounded, 'Users'),
       _NavItem(Icons.verified_user_rounded, 'Verification'),
       _NavItem(Icons.shield_rounded, 'Moderation'),
+      _NavItem(Icons.store_rounded, 'Providers'),
       if (widget.currentUser.isAdmin)
         _NavItem(Icons.group_add_rounded, 'Team'),
       if (widget.currentUser.isAdmin)
@@ -48,6 +50,8 @@ class _AdminPanelState extends State<AdminPanel> {
         return const VerificationPage();
       case 'Moderation':
         return const ModerationPage();
+      case 'Providers':
+        return const CommunityProvidersPage();
       case 'Team':
         return TeamPage(currentUser: widget.currentUser);
       case 'Settings':

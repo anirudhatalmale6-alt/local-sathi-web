@@ -8,6 +8,7 @@ import '../models/wallet_model.dart';
 import '../models/conversation_model.dart';
 import '../models/message_model.dart';
 import '../models/group_model.dart';
+import '../models/community_provider_model.dart';
 import '../models/help_request_model.dart';
 import '../models/job_model.dart';
 import '../models/market_item_model.dart';
@@ -1430,5 +1431,159 @@ class FirestoreService {
       convs.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
       return convs;
     });
+  }
+
+  // ===== COMMUNITY PROVIDERS =====
+
+  // Add a community provider (user submission)
+  Future<String?> addCommunityProvider({
+    required String name,
+    required String phone,
+    required String category,
+    required String area,
+    String? description,
+    required String createdByUserId,
+    required String createdByUserName,
+  }) async {
+    // Check daily submission limit (max 5/day)
+    final today = DateTime.now();
+    final startOfDay = DateTime(today.year, today.month, today.day);
+    final submissions = await _firestore
+        .collection('communityProviders')
+        .where('createdByUserId', isEqualTo: createdByUserId)
+        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay))
+        .get();
+    if (submissions.docs.length >= 5) return 'daily_limit';
+
+    // Check for duplicate (same phone number)
+    final duplicateCheck = await _firestore
+        .collection('communityProviders')
+        .where('phone', isEqualTo: phone)
+        .limit(1)
+        .get();
+    if (duplicateCheck.docs.isNotEmpty) return 'duplicate';
+
+    // Also check in main users collection
+    final userDupCheck = await _firestore
+        .collection('users')
+        .where('phone', isEqualTo: phone)
+        .limit(1)
+        .get();
+    if (userDupCheck.docs.isNotEmpty) return 'exists_as_user';
+
+    final provider = CommunityProvider(
+      id: '',
+      name: name,
+      phone: phone,
+      category: category,
+      area: area,
+      description: description,
+      createdByUserId: createdByUserId,
+      createdByUserName: createdByUserName,
+      isOfflineProvider: true,
+      status: ProviderStatus.pending,
+      duplicateHash: phone.replaceAll(RegExp(r'[^0-9]'), ''),
+      createdAt: DateTime.now(),
+    );
+
+    await _firestore.collection('communityProviders').add(provider.toFirestore());
+    return null; // success
+  }
+
+  // Get pending community providers (admin)
+  Stream<List<CommunityProvider>> getPendingCommunityProviders() {
+    return _firestore
+        .collection('communityProviders')
+        .where('status', isEqualTo: 'pending')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => CommunityProvider.fromFirestore(d)).toList());
+  }
+
+  // Get all community providers (admin)
+  Stream<List<CommunityProvider>> getAllCommunityProviders() {
+    return _firestore
+        .collection('communityProviders')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => CommunityProvider.fromFirestore(d)).toList());
+  }
+
+  // Get approved community providers (for search/display)
+  Stream<List<CommunityProvider>> getApprovedCommunityProviders({String? category, String? area}) {
+    Query query = _firestore
+        .collection('communityProviders')
+        .where('status', isEqualTo: 'approved');
+    if (category != null) query = query.where('category', isEqualTo: category);
+    return query.snapshots().map((snap) {
+      var list = snap.docs.map((d) => CommunityProvider.fromFirestore(d)).toList();
+      // Verified first, then by rating
+      list.sort((a, b) {
+        if (a.isVerified != b.isVerified) return a.isVerified ? -1 : 1;
+        return b.rating.compareTo(a.rating);
+      });
+      if (area != null) {
+        list = list.where((p) => p.area.toLowerCase().contains(area.toLowerCase())).toList();
+      }
+      return list;
+    });
+  }
+
+  // Approve community provider
+  Future<void> approveCommunityProvider(String providerId, String adminUid) async {
+    final providerDoc = await _firestore.collection('communityProviders').doc(providerId).get();
+    if (!providerDoc.exists) return;
+
+    final data = providerDoc.data()!;
+    await _firestore.collection('communityProviders').doc(providerId).update({
+      'status': 'approved',
+      'isVerified': true,
+      'verificationType': 'admin',
+      'approvedAt': Timestamp.fromDate(DateTime.now()),
+      'approvedBy': adminUid,
+    });
+
+    // Award points to the contributor
+    final contributorUid = data['createdByUserId'] as String;
+    await awardPoints(contributorUid, 20, 'Provider "${data['name']}" approved! +20 pts');
+  }
+
+  // Reject community provider
+  Future<void> rejectCommunityProvider(String providerId, {String? reason}) async {
+    await _firestore.collection('communityProviders').doc(providerId).update({
+      'status': 'rejected',
+      if (reason != null) 'rejectionReason': reason,
+    });
+  }
+
+  // Mark community provider as verified by admin
+  Future<void> verifyCommunityProvider(String providerId) async {
+    await _firestore.collection('communityProviders').doc(providerId).update({
+      'isVerified': true,
+      'verificationType': 'admin',
+    });
+  }
+
+  // Increment helped count (when someone calls)
+  Future<void> incrementHelpedCount(String providerId) async {
+    await _firestore.collection('communityProviders').doc(providerId).update({
+      'helpedCount': FieldValue.increment(1),
+    });
+  }
+
+  // Get user's contribution stats
+  Future<Map<String, int>> getUserContributionStats(String uid) async {
+    final all = await _firestore
+        .collection('communityProviders')
+        .where('createdByUserId', isEqualTo: uid)
+        .get();
+    int total = all.docs.length;
+    int approved = all.docs.where((d) => d.data()['status'] == 'approved').length;
+    int pending = all.docs.where((d) => d.data()['status'] == 'pending').length;
+    int totalHelped = 0;
+    for (final doc in all.docs) {
+      totalHelped += (doc.data()['helpedCount'] ?? 0) as int;
+    }
+    return {'total': total, 'approved': approved, 'pending': pending, 'helped': totalHelped};
   }
 }

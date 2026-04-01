@@ -21,6 +21,8 @@ import '../jobs/jobs_screen.dart';
 import '../marketplace/marketplace_screen.dart';
 import '../lost_found/lost_found_screen.dart';
 import '../subscription/subscription_screen.dart';
+import '../community_providers/community_providers_screen.dart';
+import '../community_providers/add_provider_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -181,6 +183,49 @@ class HomeScreen extends StatelessWidget {
                             ],
                           ),
                         ],
+                      ),
+                    ),
+
+                    // Local Directory banner
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(isDesktop ? 32 : 20, 16, isDesktop ? 32 : 20, 0),
+                      child: GestureDetector(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CommunityProvidersScreen())),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF00897B), Color(0xFF4DB6AC)],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withAlpha(30),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(Icons.store, color: Colors.white, size: 26),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Local Directory', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                                    const SizedBox(height: 2),
+                                    Text('Find offline providers near you or add one to help your community!',
+                                        style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(200))),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
 
